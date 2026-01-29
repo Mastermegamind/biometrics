@@ -1,0 +1,77 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="BiometricFingerprintsAttendanceSystem.Views.AdminRegistrationView">
+
+  <StackPanel Spacing="24">
+
+    <!-- ── Page Header ── -->
+    <StackPanel Spacing="6">
+      <TextBlock Text="Admin Registration" Classes="PageTitle" />
+      <TextBlock Text="Create new administrator or staff accounts"
+                 Classes="PageSubtitle" />
+    </StackPanel>
+
+    <!-- ══════════ Registration Form Card ══════════ -->
+    <Border Classes="GlassCard">
+      <StackPanel Spacing="20">
+        <TextBlock Text="Account Details" Classes="SectionHeader" />
+
+        <Grid ColumnDefinitions="*,*" RowDefinitions="Auto,Auto,Auto">
+
+          <!-- Row 0 -->
+          <StackPanel Grid.Row="0" Grid.Column="0" Spacing="4" Margin="0,0,8,16">
+            <TextBlock Text="USERNAME" Classes="FieldLabel" />
+            <TextBox Classes="GlassInput" Watermark="Enter username"
+                     Text="{Binding Username, Mode=TwoWay}" />
+          </StackPanel>
+
+          <StackPanel Grid.Row="0" Grid.Column="1" Spacing="4" Margin="8,0,0,16">
+            <TextBlock Text="USER TYPE / ROLE" Classes="FieldLabel" />
+            <TextBox Classes="GlassInput" Watermark="Administrator / Staff"
+                     Text="{Binding UserType, Mode=TwoWay}" />
+          </StackPanel>
+
+          <!-- Row 1 -->
+          <StackPanel Grid.Row="1" Grid.Column="0" Spacing="4" Margin="0,0,8,16">
+            <TextBlock Text="PASSWORD" Classes="FieldLabel" />
+            <TextBox Classes="GlassInput" Watermark="Enter password"
+                     Text="{Binding Password, Mode=TwoWay}" PasswordChar="&#x25CF;" />
+          </StackPanel>
+
+          <StackPanel Grid.Row="1" Grid.Column="1" Spacing="4" Margin="8,0,0,16">
+            <TextBlock Text="FULL NAME" Classes="FieldLabel" />
+            <TextBox Classes="GlassInput" Watermark="Full name"
+                     Text="{Binding Name, Mode=TwoWay}" />
+          </StackPanel>
+
+          <!-- Row 2 -->
+          <StackPanel Grid.Row="2" Grid.Column="0" Spacing="4" Margin="0,0,8,0">
+            <TextBlock Text="CONTACT NUMBER" Classes="FieldLabel" />
+            <TextBox Classes="GlassInput" Watermark="Phone number"
+                     Text="{Binding ContactNo, Mode=TwoWay}" />
+          </StackPanel>
+
+          <StackPanel Grid.Row="2" Grid.Column="1" Spacing="4" Margin="8,0,0,0">
+            <TextBlock Text="EMAIL ADDRESS" Classes="FieldLabel" />
+            <TextBox Classes="GlassInput" Watermark="email@example.com"
+                     Text="{Binding Email, Mode=TwoWay}" />
+          </StackPanel>
+
+        </Grid>
+
+        <Separator Background="{DynamicResource SeparatorBrush}" Height="1" Margin="0,4" />
+
+        <!-- ── Actions ── -->
+        <StackPanel Orientation="Horizontal" Spacing="12">
+          <Button Classes="BtnPrimary" Content="Save Admin Account"
+                  Command="{Binding SubmitCommand}" />
+          <TextBlock Text="{Binding StatusMessage}" Classes="ErrorText"
+                     VerticalAlignment="Center"
+                     IsVisible="{Binding StatusMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+        </StackPanel>
+
+      </StackPanel>
+    </Border>
+
+  </StackPanel>
+</UserControl>

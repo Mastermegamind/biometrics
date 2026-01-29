@@ -1,0 +1,138 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="BiometricFingerprintsAttendanceSystem.Views.EnrollmentView">
+
+  <StackPanel Spacing="24">
+
+    <!-- ── Page Header ── -->
+    <StackPanel Spacing="6">
+      <TextBlock Text="Fingerprint Enrollment" Classes="PageTitle" />
+      <TextBlock Text="Admin-only — enroll student fingerprints into the system"
+                 Classes="PageSubtitle" />
+    </StackPanel>
+
+    <!-- ══════════ Step 1: Lookup ══════════ -->
+    <Border Classes="GlassCard">
+      <StackPanel Spacing="16">
+
+        <!-- Step Badge -->
+        <StackPanel Orientation="Horizontal" Spacing="12">
+          <Border Background="{DynamicResource SecondaryBrush}" CornerRadius="8"
+                  Padding="10,4" BoxShadow="0 2 8 0 #0000001A">
+            <TextBlock Text="STEP 1" FontSize="11" FontWeight="Bold" Foreground="#1B1B1B" />
+          </Border>
+          <TextBlock Text="Lookup Student by Registration Number"
+                     Classes="SectionHeader" VerticalAlignment="Center" />
+        </StackPanel>
+
+        <!-- Search Bar -->
+        <Grid ColumnDefinitions="*,Auto">
+          <TextBox Grid.Column="0" Classes="GlassInput"
+                   Watermark="Enter registration number"
+                   Text="{Binding RegNo, Mode=TwoWay}" Margin="0,0,12,0" />
+          <Button Grid.Column="1" Classes="BtnPrimary" Content="Lookup"
+                  Command="{Binding LookupCommand}" />
+        </Grid>
+
+        <!-- Student Info Grid -->
+        <Grid ColumnDefinitions="*,*" RowDefinitions="Auto,Auto,Auto">
+          <StackPanel Grid.Row="0" Grid.Column="0" Spacing="4" Margin="0,0,8,12">
+            <TextBlock Text="NAME" Classes="FieldLabel" />
+            <TextBox Classes="GlassInput" Text="{Binding StudentName}" IsReadOnly="True" />
+          </StackPanel>
+          <StackPanel Grid.Row="0" Grid.Column="1" Spacing="4" Margin="8,0,0,12">
+            <TextBlock Text="CLASS" Classes="FieldLabel" />
+            <TextBox Classes="GlassInput" Text="{Binding ClassName}" IsReadOnly="True" />
+          </StackPanel>
+          <StackPanel Grid.Row="1" Grid.Column="0" Spacing="4" Margin="0,0,8,12">
+            <TextBlock Text="EMAIL" Classes="FieldLabel" />
+            <TextBox Classes="GlassInput" Text="{Binding Email}" IsReadOnly="True" />
+          </StackPanel>
+          <StackPanel Grid.Row="1" Grid.Column="1" Spacing="4" Margin="8,0,0,12">
+            <TextBlock Text="PHONE" Classes="FieldLabel" />
+            <TextBox Classes="GlassInput" Text="{Binding Phone}" IsReadOnly="True" />
+          </StackPanel>
+          <StackPanel Grid.Row="2" Grid.ColumnSpan="2" Spacing="4">
+            <TextBlock Text="PASSPORT" Classes="FieldLabel" />
+            <TextBox Classes="GlassInput" Text="{Binding Passport}" IsReadOnly="True" />
+          </StackPanel>
+        </Grid>
+
+        <Button Classes="BtnAccent" Content="Confirm Student"
+                Command="{Binding ConfirmCommand}" />
+      </StackPanel>
+    </Border>
+
+    <!-- ══════════ Step 2: Capture ══════════ -->
+    <Border Classes="GlassCard">
+      <StackPanel Spacing="16">
+
+        <!-- Step Badge -->
+        <StackPanel Orientation="Horizontal" Spacing="12">
+          <Border Background="{DynamicResource PrimaryBrush}" CornerRadius="8"
+                  Padding="10,4" BoxShadow="0 2 8 0 #0000001A">
+            <TextBlock Text="STEP 2" FontSize="11" FontWeight="Bold" Foreground="White" />
+          </Border>
+          <TextBlock Text="Capture Fingerprint Templates"
+                     Classes="SectionHeader" VerticalAlignment="Center" />
+        </StackPanel>
+
+        <!-- Capture Inputs -->
+        <Grid ColumnDefinitions="Auto,Auto,*">
+          <StackPanel Grid.Column="0" Spacing="4" Margin="0,0,6,0">
+            <TextBlock Text="HAND" Classes="FieldLabel" />
+            <TextBox Classes="GlassInput" Width="130"
+                     Watermark="Left / Right"
+                     Text="{Binding SelectedHand, Mode=TwoWay}" />
+          </StackPanel>
+          <StackPanel Grid.Column="1" Spacing="4" Margin="6,0">
+            <TextBlock Text="FINGER INDEX" Classes="FieldLabel" />
+            <TextBox Classes="GlassInput" Width="130"
+                     Watermark="Thumb / Index"
+                     Text="{Binding SelectedFingerIndex, Mode=TwoWay}" />
+          </StackPanel>
+          <StackPanel Grid.Column="2" Spacing="4" Margin="6,0,0,0">
+            <TextBlock Text="TEMPLATE (ISO 19794-2 BASE64)" Classes="FieldLabel" />
+            <TextBox Classes="GlassInput"
+                     Watermark="Paste Base64 template data"
+                     Text="{Binding TemplateBase64, Mode=TwoWay}" />
+          </StackPanel>
+        </Grid>
+
+        <!-- Actions -->
+        <StackPanel Orientation="Horizontal" Spacing="12">
+          <Button Classes="BtnPrimary" Content="Add Template"
+                  Command="{Binding AddTemplateCommand}" />
+          <Button Classes="BtnDanger" Content="Remove Selected"
+                  Command="{Binding RemoveTemplateCommand}" />
+          <CheckBox Content="Admin Override Re-Enroll"
+                    IsChecked="{Binding AllowReEnroll, Mode=TwoWay}"
+                    IsEnabled="{Binding IsAdmin}"
+                    VerticalAlignment="Center" Margin="8,0,0,0" />
+        </StackPanel>
+
+        <!-- Templates DataGrid -->
+        <DataGrid ItemsSource="{Binding Templates}"
+                  SelectedItem="{Binding SelectedTemplate}"
+                  AutoGenerateColumns="False" Height="200">
+          <DataGrid.Columns>
+            <DataGridTextColumn Header="Hand" Binding="{Binding Hand}" Width="120" />
+            <DataGridTextColumn Header="Finger" Binding="{Binding FingerIndex}" Width="120" />
+            <DataGridTextColumn Header="Template (Base64)" Binding="{Binding TemplateBase64}" Width="*" />
+          </DataGrid.Columns>
+        </DataGrid>
+
+        <Separator Background="{DynamicResource SeparatorBrush}" Height="1" />
+
+        <Button Classes="BtnPrimary" Content="Submit Enrollment"
+                Command="{Binding SubmitCommand}" />
+
+      </StackPanel>
+    </Border>
+
+    <!-- ── Status ── -->
+    <TextBlock Text="{Binding StatusMessage}" Classes="ErrorText"
+               IsVisible="{Binding StatusMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+
+  </StackPanel>
+</UserControl>

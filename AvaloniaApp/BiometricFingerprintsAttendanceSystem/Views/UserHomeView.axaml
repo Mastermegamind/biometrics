@@ -1,0 +1,84 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="BiometricFingerprintsAttendanceSystem.Views.UserHomeView">
+
+  <StackPanel Spacing="28">
+
+    <!-- ── Page Header ── -->
+    <StackPanel Spacing="6">
+      <TextBlock Text="Staff Dashboard" Classes="PageTitle" />
+      <TextBlock Text="Quick access to attendance operations"
+                 Classes="PageSubtitle" />
+    </StackPanel>
+
+    <!-- ══════════ Action Cards Grid ══════════ -->
+    <UniformGrid Columns="3" Rows="1" HorizontalAlignment="Stretch">
+
+      <!-- Card 1: Clock In -->
+      <Border Classes="StatCard" Margin="0,0,12,0">
+        <Button Classes="NavBtn" Command="{Binding NavigateClockInCommand}"
+                HorizontalAlignment="Stretch" VerticalAlignment="Stretch"
+                Padding="0">
+          <StackPanel Spacing="14" HorizontalAlignment="Center" VerticalAlignment="Center">
+            <Border Background="{DynamicResource SuccessLightBrush}" CornerRadius="16"
+                    Width="64" Height="64" HorizontalAlignment="Center">
+              <TextBlock Text="&#x23F1;" FontSize="28"
+                         HorizontalAlignment="Center" VerticalAlignment="Center" />
+            </Border>
+            <TextBlock Text="Clock In" Classes="CardTitle" HorizontalAlignment="Center" />
+            <TextBlock Text="Record your arrival"
+                       Classes="PageSubtitle" HorizontalAlignment="Center" />
+          </StackPanel>
+        </Button>
+      </Border>
+
+      <!-- Card 2: Clock Out -->
+      <Border Classes="StatCard" Margin="6,0">
+        <Button Classes="NavBtn" Command="{Binding NavigateClockOutCommand}"
+                HorizontalAlignment="Stretch" VerticalAlignment="Stretch"
+                Padding="0">
+          <StackPanel Spacing="14" HorizontalAlignment="Center" VerticalAlignment="Center">
+            <Border Background="{DynamicResource PrimaryLightBrush}" CornerRadius="16"
+                    Width="64" Height="64" HorizontalAlignment="Center">
+              <TextBlock Text="&#x23F3;" FontSize="28"
+                         HorizontalAlignment="Center" VerticalAlignment="Center" />
+            </Border>
+            <TextBlock Text="Clock Out" Classes="CardTitle" HorizontalAlignment="Center" />
+            <TextBlock Text="Record your departure"
+                       Classes="PageSubtitle" HorizontalAlignment="Center" />
+          </StackPanel>
+        </Button>
+      </Border>
+
+      <!-- Card 3: My Reports -->
+      <Border Classes="StatCard" Margin="12,0,0,0">
+        <Button Classes="NavBtn" Command="{Binding NavigateReportCommand}"
+                HorizontalAlignment="Stretch" VerticalAlignment="Stretch"
+                Padding="0">
+          <StackPanel Spacing="14" HorizontalAlignment="Center" VerticalAlignment="Center">
+            <Border Background="{DynamicResource SecondaryLightBrush}" CornerRadius="16"
+                    Width="64" Height="64" HorizontalAlignment="Center">
+              <TextBlock Text="&#x1F4CB;" FontSize="28"
+                         HorizontalAlignment="Center" VerticalAlignment="Center" />
+            </Border>
+            <TextBlock Text="Attendance Report" Classes="CardTitle" HorizontalAlignment="Center" />
+            <TextBlock Text="View attendance history"
+                       Classes="PageSubtitle" HorizontalAlignment="Center" />
+          </StackPanel>
+        </Button>
+      </Border>
+
+    </UniformGrid>
+
+    <!-- ══════════ Info Card ══════════ -->
+    <Border Classes="GlassCard">
+      <StackPanel Spacing="10">
+        <TextBlock Text="How It Works" Classes="SectionHeader" />
+        <TextBlock Foreground="{DynamicResource TextSecondaryBrush}" FontSize="13"
+                   TextWrapping="Wrap"
+                   Text="Use the Clock In option when you arrive and Clock Out when you leave. Your fingerprint will be scanned and matched against the enrollment database to record your attendance automatically." />
+      </StackPanel>
+    </Border>
+
+  </StackPanel>
+</UserControl>

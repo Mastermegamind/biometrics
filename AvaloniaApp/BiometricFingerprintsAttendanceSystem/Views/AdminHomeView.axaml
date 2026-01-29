@@ -1,0 +1,115 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="BiometricFingerprintsAttendanceSystem.Views.AdminHomeView">
+
+  <StackPanel Spacing="28">
+
+    <!-- ── Page Header ── -->
+    <StackPanel Spacing="6">
+      <TextBlock Text="Administrator Dashboard" Classes="PageTitle" />
+      <TextBlock Text="Overview of your biometric attendance system"
+                 Classes="PageSubtitle" />
+    </StackPanel>
+
+    <!-- ══════════ Stat Cards Grid ══════════ -->
+    <UniformGrid Columns="4" Rows="1" HorizontalAlignment="Stretch">
+
+      <!-- Card 1: Total Students -->
+      <Border Classes="StatCard" Margin="0,0,12,0">
+        <Grid ColumnDefinitions="Auto,*">
+          <Border Grid.Column="0" Background="{DynamicResource SecondaryLightBrush}" CornerRadius="12"
+                  Width="48" Height="48" VerticalAlignment="Top" Margin="0,0,16,0">
+            <TextBlock Text="&#x1F393;" FontSize="22"
+                       HorizontalAlignment="Center" VerticalAlignment="Center" />
+          </Border>
+          <StackPanel Grid.Column="1" Spacing="4" VerticalAlignment="Center">
+            <TextBlock Text="{Binding TotalStudents}" Classes="StatNumber" />
+            <TextBlock Text="Total Students" Classes="StatLabel" />
+          </StackPanel>
+        </Grid>
+      </Border>
+
+      <!-- Card 2: Today's Attendance -->
+      <Border Classes="StatCard" Margin="6,0">
+        <Grid ColumnDefinitions="Auto,*">
+          <Border Grid.Column="0" Background="{DynamicResource SuccessLightBrush}" CornerRadius="12"
+                  Width="48" Height="48" VerticalAlignment="Top" Margin="0,0,16,0">
+            <TextBlock Text="&#x2705;" FontSize="22"
+                       HorizontalAlignment="Center" VerticalAlignment="Center" />
+          </Border>
+          <StackPanel Grid.Column="1" Spacing="4" VerticalAlignment="Center">
+            <TextBlock Text="{Binding TodayAttendance}" Classes="StatNumber" />
+            <TextBlock Text="Today's Check-Ins" Classes="StatLabel" />
+          </StackPanel>
+        </Grid>
+      </Border>
+
+      <!-- Card 3: Enrolled Fingerprints -->
+      <Border Classes="StatCard" Margin="6,0">
+        <Grid ColumnDefinitions="Auto,*">
+          <Border Grid.Column="0" Background="{DynamicResource PrimaryLightBrush}" CornerRadius="12"
+                  Width="48" Height="48" VerticalAlignment="Top" Margin="0,0,16,0">
+            <TextBlock Text="&#x1F91A;" FontSize="22"
+                       HorizontalAlignment="Center" VerticalAlignment="Center" />
+          </Border>
+          <StackPanel Grid.Column="1" Spacing="4" VerticalAlignment="Center">
+            <TextBlock Text="{Binding EnrolledCount}" Classes="StatNumber" />
+            <TextBlock Text="Enrolled Prints" Classes="StatLabel" />
+          </StackPanel>
+        </Grid>
+      </Border>
+
+      <!-- Card 4: Admin Users -->
+      <Border Classes="StatCard" Margin="12,0,0,0">
+        <Grid ColumnDefinitions="Auto,*">
+          <Border Grid.Column="0" Background="{DynamicResource SecondaryLightBrush}" CornerRadius="12"
+                  Width="48" Height="48" VerticalAlignment="Top" Margin="0,0,16,0">
+            <TextBlock Text="&#x1F6E1;" FontSize="22"
+                       HorizontalAlignment="Center" VerticalAlignment="Center" />
+          </Border>
+          <StackPanel Grid.Column="1" Spacing="4" VerticalAlignment="Center">
+            <TextBlock Text="{Binding AdminCount}" Classes="StatNumber" />
+            <TextBlock Text="Admin Users" Classes="StatLabel" />
+          </StackPanel>
+        </Grid>
+      </Border>
+
+    </UniformGrid>
+
+    <!-- ══════════ Quick Actions ══════════ -->
+    <Border Classes="GlassCard">
+      <StackPanel Spacing="16">
+        <TextBlock Text="Quick Actions" Classes="SectionHeader" />
+        <WrapPanel Orientation="Horizontal" HorizontalAlignment="Left">
+          <Button Classes="BtnPrimary" Content="&#x1F464;  Register Student"
+                  Command="{Binding NavigateRegisterCommand}" Margin="0,0,12,8" />
+          <Button Classes="BtnAccent" Content="&#x1F91A;  Enroll Fingerprints"
+                  Command="{Binding NavigateEnrollmentCommand}" Margin="0,0,12,8" />
+          <Button Classes="BtnSecondary" Content="&#x1F4CB;  View Reports"
+                  Command="{Binding NavigateReportCommand}" Margin="0,0,12,8" />
+          <Button Classes="BtnSecondary" Content="&#x1F6E1;  Add Admin"
+                  Command="{Binding NavigateAdminRegCommand}" Margin="0,0,12,8" />
+        </WrapPanel>
+      </StackPanel>
+    </Border>
+
+    <!-- ══════════ System Info ══════════ -->
+    <Border Classes="GlassCardSmall">
+      <Grid ColumnDefinitions="*,*,*">
+        <StackPanel Grid.Column="0" Spacing="4">
+          <TextBlock Text="SYSTEM" Classes="FieldLabel" />
+          <TextBlock Text=".NET 10 + Avalonia" Foreground="{DynamicResource TextPrimaryBrush}" FontSize="13" />
+        </StackPanel>
+        <StackPanel Grid.Column="1" Spacing="4">
+          <TextBlock Text="DATABASE" Classes="FieldLabel" />
+          <TextBlock Text="MySQL Connected" Foreground="{DynamicResource SuccessBrush}" FontSize="13" />
+        </StackPanel>
+        <StackPanel Grid.Column="2" Spacing="4">
+          <TextBlock Text="FINGERPRINT DEVICE" Classes="FieldLabel" />
+          <TextBlock Text="{Binding DeviceStatus}" Foreground="{DynamicResource TextSecondaryBrush}" FontSize="13" />
+        </StackPanel>
+      </Grid>
+    </Border>
+
+  </StackPanel>
+</UserControl>

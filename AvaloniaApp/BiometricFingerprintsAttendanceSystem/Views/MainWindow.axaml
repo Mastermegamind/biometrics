@@ -1,0 +1,107 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="BiometricFingerprintsAttendanceSystem.Views.MainWindow"
+        Title="BioClock — Biometric Attendance System"
+        Width="1280" Height="800"
+        MinWidth="960" MinHeight="680"
+        Background="{DynamicResource BgMainBrush}">
+
+  <Grid>
+    <Grid.ColumnDefinitions>
+      <ColumnDefinition Width="{Binding SidebarWidth}" />
+      <ColumnDefinition Width="*" />
+    </Grid.ColumnDefinitions>
+
+    <!-- ══════════════ SIDEBAR (always dark maroon) ══════════════ -->
+    <Border Grid.Column="0"
+            Background="{DynamicResource SidebarBgBrush}"
+            BoxShadow="4 0 24 0 #00000060"
+            Padding="0"
+            IsVisible="{Binding IsSidebarVisible}">
+
+      <DockPanel>
+
+        <!-- ── Brand Area ── -->
+        <StackPanel DockPanel.Dock="Top" Margin="24,28,24,0" Spacing="4">
+          <StackPanel Orientation="Horizontal" Spacing="12">
+            <Border Background="{DynamicResource PrimaryBrush}"
+                    CornerRadius="12" Width="44" Height="44"
+                    HorizontalAlignment="Left">
+              <TextBlock Text="&#x1F9EC;" FontSize="22"
+                         HorizontalAlignment="Center" VerticalAlignment="Center" />
+            </Border>
+            <StackPanel VerticalAlignment="Center" Spacing="2">
+              <TextBlock Text="BioClock" FontSize="22" FontWeight="Bold"
+                         Foreground="{DynamicResource SecondaryBrush}" />
+              <TextBlock Text="Attendance Console" FontSize="11"
+                         Foreground="{DynamicResource SidebarTextBrush}" />
+            </StackPanel>
+          </StackPanel>
+
+          <Separator Background="{DynamicResource SeparatorBrush}" Height="1" Margin="0,20,0,8" />
+        </StackPanel>
+
+        <!-- ── Theme + Version / Footer ── -->
+        <StackPanel DockPanel.Dock="Bottom" Margin="24,0,24,20" Spacing="10">
+          <Separator Background="{DynamicResource SeparatorBrush}" Height="1" Margin="0,0,0,8" />
+          <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Spacing="8">
+            <TextBlock Text="Theme" FontSize="11" Foreground="{DynamicResource SidebarTextBrush}" />
+            <ToggleSwitch IsChecked="{Binding IsDarkMode, Mode=TwoWay}"
+                          OffContent="Light" OnContent="Dark" />
+          </StackPanel>
+          <TextBlock Text="v2.0  ·  .NET 10 + Avalonia"
+                     FontSize="11"
+                     Foreground="{DynamicResource FooterTextBrush}"
+                     HorizontalAlignment="Center" />
+        </StackPanel>
+
+        <!-- ── Nav Items ── -->
+        <ScrollViewer VerticalScrollBarVisibility="Auto"
+                      Margin="12,8,12,0">
+          <ItemsControl ItemsSource="{Binding NavItems}">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate>
+                <Button Classes="NavBtn"
+                        Command="{Binding NavigateCommand}"
+                        Margin="0,2">
+                  <StackPanel Orientation="Horizontal" Spacing="12">
+                    <TextBlock Text="{Binding Icon}" FontSize="16" Width="22"
+                               TextAlignment="Center"
+                               VerticalAlignment="Center"
+                               Foreground="{DynamicResource SidebarTextBrush}" />
+                    <TextBlock Text="{Binding Title}" FontSize="13.5"
+                               VerticalAlignment="Center" />
+                  </StackPanel>
+                </Button>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </ScrollViewer>
+
+      </DockPanel>
+    </Border>
+
+    <!-- ══════════════ CONTENT AREA ══════════════ -->
+    <Border Grid.Column="1" Background="{DynamicResource BgMainBrush}">
+      <ScrollViewer HorizontalScrollBarVisibility="Disabled"
+                    VerticalScrollBarVisibility="Auto">
+        <StackPanel Margin="32,28" Spacing="16">
+          <Grid ColumnDefinitions="Auto,* ,Auto" VerticalAlignment="Center">
+            <Button Classes="BtnSecondary"
+                    Content="&#x2190;  Back"
+                    HorizontalAlignment="Left"
+                    IsVisible="{Binding IsBackVisible}"
+                    Command="{Binding BackCommand}" />
+            <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+              <TextBlock Text="Theme" FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center" />
+              <ToggleSwitch IsChecked="{Binding IsDarkMode, Mode=TwoWay}"
+                            OffContent="Light" OnContent="Dark" />
+            </StackPanel>
+          </Grid>
+          <ContentControl Content="{Binding CurrentView}" />
+        </StackPanel>
+      </ScrollViewer>
+    </Border>
+
+  </Grid>
+</Window>

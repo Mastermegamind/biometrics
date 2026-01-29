@@ -1,0 +1,98 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="BiometricFingerprintsAttendanceSystem.Views.RegisterView">
+
+  <StackPanel Spacing="24">
+
+    <!-- ── Page Header ── -->
+    <StackPanel Spacing="6">
+      <TextBlock Text="Register Student" Classes="PageTitle" />
+      <TextBlock Text="Add a new student to the biometric system"
+                 Classes="PageSubtitle" />
+    </StackPanel>
+
+    <!-- ══════════ Registration Form Card ══════════ -->
+    <Border Classes="GlassCard">
+      <StackPanel Spacing="20">
+        <TextBlock Text="Student Information" Classes="SectionHeader" />
+
+        <Grid ColumnDefinitions="*,*" RowDefinitions="Auto,Auto,Auto,Auto">
+
+          <!-- Row 0 -->
+          <StackPanel Grid.Row="0" Grid.Column="0" Spacing="4" Margin="0,0,8,16">
+            <TextBlock Text="MATRIC NUMBER" Classes="FieldLabel" />
+            <TextBox Classes="GlassInput" Watermark="e.g. MAT/2024/001"
+                     Text="{Binding MatricNo, Mode=TwoWay}" />
+          </StackPanel>
+
+          <StackPanel Grid.Row="0" Grid.Column="1" Spacing="4" Margin="8,0,0,16">
+            <TextBlock Text="FULL NAME" Classes="FieldLabel" />
+            <TextBox Classes="GlassInput" Watermark="Student full name"
+                     Text="{Binding Name, Mode=TwoWay}" />
+          </StackPanel>
+
+          <!-- Row 1 -->
+          <StackPanel Grid.Row="1" Grid.Column="0" Spacing="4" Margin="0,0,8,16">
+            <TextBlock Text="FACULTY" Classes="FieldLabel" />
+            <TextBox Classes="GlassInput" Watermark="e.g. Engineering"
+                     Text="{Binding Faculty, Mode=TwoWay}" />
+          </StackPanel>
+
+          <StackPanel Grid.Row="1" Grid.Column="1" Spacing="4" Margin="8,0,0,16">
+            <TextBlock Text="DEPARTMENT" Classes="FieldLabel" />
+            <TextBox Classes="GlassInput" Watermark="e.g. Computer Science"
+                     Text="{Binding Department, Mode=TwoWay}" />
+          </StackPanel>
+
+          <!-- Row 2 -->
+          <StackPanel Grid.Row="2" Grid.Column="0" Spacing="4" Margin="0,0,8,16">
+            <TextBlock Text="BLOOD GROUP" Classes="FieldLabel" />
+            <TextBox Classes="GlassInput" Watermark="e.g. O+"
+                     Text="{Binding BloodGroup, Mode=TwoWay}" />
+          </StackPanel>
+
+          <StackPanel Grid.Row="2" Grid.Column="1" Spacing="4" Margin="8,0,0,16">
+            <TextBlock Text="GRADUATION YEAR" Classes="FieldLabel" />
+            <TextBox Classes="GlassInput" Watermark="e.g. 2028"
+                     Text="{Binding GradYear, Mode=TwoWay}" />
+          </StackPanel>
+
+          <!-- Row 3 -->
+          <StackPanel Grid.Row="3" Grid.Column="0" Spacing="4" Margin="0,0,8,0">
+            <TextBlock Text="GENDER" Classes="FieldLabel" />
+            <TextBox Classes="GlassInput" Watermark="Male / Female"
+                     Text="{Binding Gender, Mode=TwoWay}" />
+          </StackPanel>
+
+          <!-- Passport Photo Placeholder -->
+          <Border Grid.Row="3" Grid.Column="1"
+                  Background="{DynamicResource BgCardBrush}" CornerRadius="12"
+                  BorderBrush="{DynamicResource BorderSubtleBrush}" BorderThickness="1"
+                  Padding="16" Margin="8,0,0,0">
+            <StackPanel Spacing="6" HorizontalAlignment="Center" VerticalAlignment="Center">
+              <TextBlock Text="&#x1F4F7;" FontSize="24" HorizontalAlignment="Center" />
+              <TextBlock Text="Passport Photo" Classes="FieldLabel" HorizontalAlignment="Center" />
+              <TextBlock Text="Camera capture / upload"
+                         FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}"
+                         HorizontalAlignment="Center" />
+            </StackPanel>
+          </Border>
+
+        </Grid>
+
+        <Separator Background="{DynamicResource SeparatorBrush}" Height="1" Margin="0,4" />
+
+        <!-- ── Actions ── -->
+        <StackPanel Orientation="Horizontal" Spacing="12">
+          <Button Classes="BtnPrimary" Content="Save Student"
+                  Command="{Binding SubmitCommand}" />
+          <TextBlock Text="{Binding StatusMessage}" Classes="ErrorText"
+                     VerticalAlignment="Center"
+                     IsVisible="{Binding StatusMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+        </StackPanel>
+
+      </StackPanel>
+    </Border>
+
+  </StackPanel>
+</UserControl>

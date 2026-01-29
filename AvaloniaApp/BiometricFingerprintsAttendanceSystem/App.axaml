@@ -1,0 +1,325 @@
+<Application xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="clr-namespace:BiometricFingerprintsAttendanceSystem"
+             x:Class="BiometricFingerprintsAttendanceSystem.App"
+             RequestedThemeVariant="Default">
+
+  <Application.Resources>
+    <ResourceDictionary>
+
+      <!-- ── Brand Colors (theme-invariant) ── -->
+      <SolidColorBrush x:Key="PrimaryBrush" Color="#8B0000" />
+      <SolidColorBrush x:Key="PrimaryHoverBrush" Color="#6B0000" />
+      <SolidColorBrush x:Key="PrimaryLightBrush" Color="#8B000020" />
+      <SolidColorBrush x:Key="SecondaryBrush" Color="#FFD000" />
+      <SolidColorBrush x:Key="SecondaryHoverBrush" Color="#E0B800" />
+      <SolidColorBrush x:Key="SecondaryLightBrush" Color="#FFD00025" />
+      <SolidColorBrush x:Key="DangerBrush" Color="#EF4444" />
+      <SolidColorBrush x:Key="SuccessBrush" Color="#22C55E" />
+      <SolidColorBrush x:Key="SuccessLightBrush" Color="#22C55E20" />
+      <SolidColorBrush x:Key="AccentBlueBrush" Color="#3B82F6" />
+      <SolidColorBrush x:Key="AccentBlueLightBrush" Color="#3B82F620" />
+      <SolidColorBrush x:Key="PurpleLightBrush" Color="#A855F720" />
+      <SolidColorBrush x:Key="SidebarBgBrush" Color="#1A0A0A" />
+      <SolidColorBrush x:Key="SidebarTextBrush" Color="#9CA3AF" />
+
+      <!-- ── Theme Dictionaries ── -->
+      <ResourceDictionary.ThemeDictionaries>
+
+        <!-- ════════ DARK MODE ════════ -->
+        <ResourceDictionary x:Key="Dark">
+          <SolidColorBrush x:Key="BgMainBrush" Color="#0B0F19" />
+          <SolidColorBrush x:Key="BgCardBrush" Color="#14161F" />
+          <SolidColorBrush x:Key="BgCardHoverBrush" Color="#1B1F2A" />
+          <SolidColorBrush x:Key="TextPrimaryBrush" Color="#F1F5F9" />
+          <SolidColorBrush x:Key="TextSecondaryBrush" Color="#94A3B8" />
+          <SolidColorBrush x:Key="BorderSubtleBrush" Color="#232838" />
+          <SolidColorBrush x:Key="InputBgBrush" Color="#111522" />
+          <SolidColorBrush x:Key="InputBorderBrush" Color="#2B3143" />
+          <SolidColorBrush x:Key="SeparatorBrush" Color="#232838" />
+          <SolidColorBrush x:Key="NavHoverBrush" Color="#1A1F2B" />
+          <SolidColorBrush x:Key="DataGridRowBrush" Color="#121621" />
+          <SolidColorBrush x:Key="DataGridHeaderBrush" Color="#151A26" />
+          <SolidColorBrush x:Key="DataGridLineBrush" Color="#232838" />
+          <SolidColorBrush x:Key="BtnPrimaryFgBrush" Color="White" />
+          <SolidColorBrush x:Key="FooterTextBrush" Color="#FFFFFF30" />
+        </ResourceDictionary>
+
+        <!-- ════════ LIGHT MODE ════════ -->
+        <ResourceDictionary x:Key="Light">
+          <SolidColorBrush x:Key="BgMainBrush" Color="#F3F4F6" />
+          <SolidColorBrush x:Key="BgCardBrush" Color="#FFFFFF" />
+          <SolidColorBrush x:Key="BgCardHoverBrush" Color="#F9FAFB" />
+          <SolidColorBrush x:Key="TextPrimaryBrush" Color="#111827" />
+          <SolidColorBrush x:Key="TextSecondaryBrush" Color="#6B7280" />
+          <SolidColorBrush x:Key="BorderSubtleBrush" Color="#E5E7EB" />
+          <SolidColorBrush x:Key="InputBgBrush" Color="#F9FAFB" />
+          <SolidColorBrush x:Key="InputBorderBrush" Color="#D1D5DB" />
+          <SolidColorBrush x:Key="SeparatorBrush" Color="#E5E7EB" />
+          <SolidColorBrush x:Key="NavHoverBrush" Color="#FFFFFF18" />
+          <SolidColorBrush x:Key="DataGridRowBrush" Color="#F9FAFB" />
+          <SolidColorBrush x:Key="DataGridHeaderBrush" Color="#F3F4F6" />
+          <SolidColorBrush x:Key="DataGridLineBrush" Color="#E5E7EB" />
+          <SolidColorBrush x:Key="BtnPrimaryFgBrush" Color="White" />
+          <SolidColorBrush x:Key="FooterTextBrush" Color="#FFFFFF60" />
+        </ResourceDictionary>
+
+      </ResourceDictionary.ThemeDictionaries>
+    </ResourceDictionary>
+  </Application.Resources>
+
+  <Application.Styles>
+    <FluentTheme />
+
+    <!-- ── GlassCard Style ── -->
+    <Style Selector="Border.GlassCard">
+      <Setter Property="Background" Value="{DynamicResource BgCardBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource BorderSubtleBrush}" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="16" />
+      <Setter Property="Padding" Value="24" />
+      <Setter Property="BoxShadow" Value="0 8 32 0 #00000018" />
+    </Style>
+
+    <Style Selector="Border.GlassCardSmall">
+      <Setter Property="Background" Value="{DynamicResource BgCardBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource BorderSubtleBrush}" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="12" />
+      <Setter Property="Padding" Value="16" />
+      <Setter Property="BoxShadow" Value="0 4 16 0 #00000012" />
+    </Style>
+
+    <!-- ── StatCard ── -->
+    <Style Selector="Border.StatCard">
+      <Setter Property="Background" Value="{DynamicResource BgCardBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource BorderSubtleBrush}" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="16" />
+      <Setter Property="Padding" Value="24" />
+      <Setter Property="BoxShadow" Value="0 8 32 0 #00000018" />
+      <Setter Property="MinHeight" Value="140" />
+    </Style>
+
+    <!-- ── Typography ── -->
+    <Style Selector="TextBlock.PageTitle">
+      <Setter Property="FontSize" Value="28" />
+      <Setter Property="FontWeight" Value="Bold" />
+      <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
+    </Style>
+
+    <Style Selector="TextBlock.PageSubtitle">
+      <Setter Property="FontSize" Value="14" />
+      <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}" />
+    </Style>
+
+    <Style Selector="TextBlock.CardTitle">
+      <Setter Property="FontSize" Value="16" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
+    </Style>
+
+    <Style Selector="TextBlock.StatNumber">
+      <Setter Property="FontSize" Value="36" />
+      <Setter Property="FontWeight" Value="Bold" />
+      <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
+    </Style>
+
+    <Style Selector="TextBlock.StatLabel">
+      <Setter Property="FontSize" Value="13" />
+      <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}" />
+    </Style>
+
+    <Style Selector="TextBlock.SectionHeader">
+      <Setter Property="FontSize" Value="18" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
+    </Style>
+
+    <Style Selector="TextBlock.FieldLabel">
+      <Setter Property="FontSize" Value="12" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}" />
+      <Setter Property="Margin" Value="0,0,0,4" />
+    </Style>
+
+    <Style Selector="TextBlock.ErrorText">
+      <Setter Property="Foreground" Value="{DynamicResource DangerBrush}" />
+      <Setter Property="FontSize" Value="13" />
+    </Style>
+
+    <!-- ── Primary Button (Dark Red #8B0000) ── -->
+    <Style Selector="Button.BtnPrimary">
+      <Setter Property="Background" Value="{DynamicResource PrimaryBrush}" />
+      <Setter Property="Foreground" Value="{DynamicResource BtnPrimaryFgBrush}" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="FontSize" Value="14" />
+      <Setter Property="Padding" Value="20,12" />
+      <Setter Property="CornerRadius" Value="10" />
+      <Setter Property="BorderThickness" Value="0" />
+    </Style>
+    <Style Selector="Button.BtnPrimary:pointerover /template/ ContentPresenter">
+      <Setter Property="Background" Value="{DynamicResource PrimaryHoverBrush}" />
+    </Style>
+
+    <!-- ── Secondary Button (Ghost / Outlined) ── -->
+    <Style Selector="Button.BtnSecondary">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="FontSize" Value="14" />
+      <Setter Property="Padding" Value="20,12" />
+      <Setter Property="CornerRadius" Value="10" />
+      <Setter Property="BorderBrush" Value="{DynamicResource BorderSubtleBrush}" />
+      <Setter Property="BorderThickness" Value="1" />
+    </Style>
+    <Style Selector="Button.BtnSecondary:pointerover /template/ ContentPresenter">
+      <Setter Property="Background" Value="{DynamicResource BgCardBrush}" />
+    </Style>
+
+    <!-- ── Danger Button ── -->
+    <Style Selector="Button.BtnDanger">
+      <Setter Property="Background" Value="{DynamicResource DangerBrush}" />
+      <Setter Property="Foreground" Value="White" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="FontSize" Value="14" />
+      <Setter Property="Padding" Value="20,12" />
+      <Setter Property="CornerRadius" Value="10" />
+      <Setter Property="BorderThickness" Value="0" />
+    </Style>
+
+    <!-- ── Accent Button (Golden Yellow #FFD000) ── -->
+    <Style Selector="Button.BtnAccent">
+      <Setter Property="Background" Value="{DynamicResource SecondaryBrush}" />
+      <Setter Property="Foreground" Value="#1B1B1B" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="FontSize" Value="14" />
+      <Setter Property="Padding" Value="20,12" />
+      <Setter Property="CornerRadius" Value="10" />
+      <Setter Property="BorderThickness" Value="0" />
+    </Style>
+    <Style Selector="Button.BtnAccent:pointerover /template/ ContentPresenter">
+      <Setter Property="Background" Value="{DynamicResource SecondaryHoverBrush}" />
+    </Style>
+
+    <!-- ── Secondary Accent Button (Golden Yellow) ── -->
+    <Style Selector="Button.BtnBlue">
+      <Setter Property="Background" Value="{DynamicResource SecondaryBrush}" />
+      <Setter Property="Foreground" Value="#1B1B1B" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="FontSize" Value="14" />
+      <Setter Property="Padding" Value="20,12" />
+      <Setter Property="CornerRadius" Value="10" />
+      <Setter Property="BorderThickness" Value="0" />
+    </Style>
+    <Style Selector="Button.BtnBlue:pointerover /template/ ContentPresenter">
+      <Setter Property="Background" Value="{DynamicResource SecondaryHoverBrush}" />
+    </Style>
+
+    <!-- ── Nav Button ── -->
+    <Style Selector="Button.NavBtn">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="Foreground" Value="{DynamicResource SidebarTextBrush}" />
+      <Setter Property="Padding" Value="14,11" />
+      <Setter Property="CornerRadius" Value="10" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="HorizontalAlignment" Value="Stretch" />
+      <Setter Property="HorizontalContentAlignment" Value="Left" />
+    </Style>
+    <Style Selector="Button.NavBtn:pointerover /template/ ContentPresenter">
+      <Setter Property="Background" Value="{DynamicResource NavHoverBrush}" />
+    </Style>
+
+    <!-- ── ToggleSwitch (Primary Color) ── -->
+    <Style Selector="ToggleSwitch">
+      <Setter Property="OffContentTemplate">
+        <Setter.Value>
+          <DataTemplate>
+            <TextBlock Text="{Binding}" Foreground="{DynamicResource SidebarTextBrush}" FontSize="11" />
+          </DataTemplate>
+        </Setter.Value>
+      </Setter>
+      <Setter Property="OnContentTemplate">
+        <Setter.Value>
+          <DataTemplate>
+            <TextBlock Text="{Binding}" Foreground="{DynamicResource SecondaryBrush}" FontSize="11" />
+          </DataTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
+    <Style Selector="ToggleSwitch:pointerover /template/ Border#SwitchTrack">
+      <Setter Property="BorderBrush" Value="{DynamicResource PrimaryBrush}" />
+    </Style>
+    <Style Selector="ToggleSwitch:checked /template/ Border#SwitchTrack">
+      <Setter Property="Background" Value="{DynamicResource PrimaryBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource PrimaryBrush}" />
+    </Style>
+    <Style Selector="ToggleSwitch:checked /template/ Border#SwitchThumb">
+      <Setter Property="Background" Value="White" />
+    </Style>
+    <Style Selector="ToggleSwitch /template/ Border#SwitchTrack">
+      <Setter Property="Background" Value="{DynamicResource BorderSubtleBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource BorderSubtleBrush}" />
+    </Style>
+
+    <!-- ── TextBox Glass Style ── -->
+    <Style Selector="TextBox.GlassInput">
+      <Setter Property="Background" Value="{DynamicResource InputBgBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource InputBorderBrush}" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="10" />
+      <Setter Property="Padding" Value="14,12" />
+      <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
+      <Setter Property="FontSize" Value="14" />
+    </Style>
+    <Style Selector="TextBox.GlassInput:focus">
+      <Setter Property="BorderBrush" Value="{DynamicResource PrimaryBrush}" />
+    </Style>
+
+    <!-- ── DataGrid Theme ── -->
+    <Style Selector="DataGrid">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="RowBackground" Value="{DynamicResource DataGridRowBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource BorderSubtleBrush}" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="12" />
+      <Setter Property="GridLinesVisibility" Value="Horizontal" />
+      <Setter Property="HorizontalGridLinesBrush" Value="{DynamicResource DataGridLineBrush}" />
+      <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
+    </Style>
+
+    <Style Selector="DataGridColumnHeader">
+      <Setter Property="Background" Value="{DynamicResource DataGridHeaderBrush}" />
+      <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="FontSize" Value="12" />
+      <Setter Property="Padding" Value="12,10" />
+    </Style>
+
+    <Style Selector="DataGridRow">
+      <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
+      <Setter Property="FontSize" Value="13" />
+    </Style>
+
+    <Style Selector="DataGridCell">
+      <Setter Property="Padding" Value="12,8" />
+    </Style>
+
+    <!-- ── Separator ── -->
+    <Style Selector="Separator.SubtleLine">
+      <Setter Property="Background" Value="{DynamicResource SeparatorBrush}" />
+      <Setter Property="Height" Value="1" />
+      <Setter Property="Margin" Value="0,8" />
+    </Style>
+
+    <!-- ── CheckBox ── -->
+    <Style Selector="CheckBox">
+      <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
+    </Style>
+
+  </Application.Styles>
+
+  <Application.DataTemplates>
+    <local:ViewLocator />
+  </Application.DataTemplates>
+</Application>

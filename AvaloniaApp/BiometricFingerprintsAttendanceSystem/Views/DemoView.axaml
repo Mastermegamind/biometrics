@@ -1,0 +1,299 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="clr-namespace:BiometricFingerprintsAttendanceSystem.Views"
+             x:Class="BiometricFingerprintsAttendanceSystem.Views.DemoView">
+
+  <ScrollViewer VerticalScrollBarVisibility="Auto">
+    <StackPanel Spacing="24" Margin="0,0,0,24">
+
+      <!-- Page Header -->
+      <StackPanel Spacing="6">
+        <TextBlock Text="Demo Testing Mode" Classes="PageTitle" />
+        <TextBlock Text="Test enrollment, clock-in, and clock-out with real fingerprint hardware"
+                   Classes="PageSubtitle" />
+      </StackPanel>
+
+      <!-- Demo Student Info Card -->
+      <Border Classes="GlassCard">
+        <Grid ColumnDefinitions="Auto,*">
+          <Border Grid.Column="0" Background="{DynamicResource PrimaryLightBrush}"
+                  CornerRadius="12" Width="64" Height="64"
+                  VerticalAlignment="Center" Margin="0,0,20,0">
+            <TextBlock Text="&#x1F464;" FontSize="28"
+                       HorizontalAlignment="Center" VerticalAlignment="Center" />
+          </Border>
+          <StackPanel Grid.Column="1" Spacing="8" VerticalAlignment="Center">
+            <TextBlock Text="Demo Student" Classes="SectionHeader" Margin="0" />
+            <Grid ColumnDefinitions="Auto,*,Auto,*,Auto,*">
+              <TextBlock Grid.Column="0" Text="Reg No:" Classes="FieldLabel" VerticalAlignment="Center" />
+              <TextBlock Grid.Column="1" Text="{Binding DemoRegNo}"
+                         Foreground="{DynamicResource TextPrimaryBrush}"
+                         FontWeight="SemiBold" Margin="8,0,24,0" VerticalAlignment="Center" />
+              <TextBlock Grid.Column="2" Text="Name:" Classes="FieldLabel" VerticalAlignment="Center" />
+              <TextBlock Grid.Column="3" Text="{Binding DemoName}"
+                         Foreground="{DynamicResource TextPrimaryBrush}"
+                         FontWeight="SemiBold" Margin="8,0,24,0" VerticalAlignment="Center" />
+              <TextBlock Grid.Column="4" Text="Class:" Classes="FieldLabel" VerticalAlignment="Center" />
+              <TextBlock Grid.Column="5" Text="{Binding DemoClass}"
+                         Foreground="{DynamicResource TextPrimaryBrush}"
+                         FontWeight="SemiBold" Margin="8,0,0,0" VerticalAlignment="Center" />
+            </Grid>
+          </StackPanel>
+        </Grid>
+      </Border>
+
+      <!-- Status Message -->
+      <Border Classes="GlassCardSmall"
+              Background="{Binding StatusType, Converter={x:Static local:StatusColorConverter.Instance}}">
+        <StackPanel Orientation="Horizontal" Spacing="12">
+          <TextBlock Text="&#x1F4AC;" FontSize="18" VerticalAlignment="Center" />
+          <TextBlock Text="{Binding StatusMessage}"
+                     Foreground="{DynamicResource TextPrimaryBrush}"
+                     FontSize="14" VerticalAlignment="Center" TextWrapping="Wrap" />
+        </StackPanel>
+      </Border>
+
+      <!-- Action Cards Grid -->
+      <UniformGrid Columns="3" Rows="1" HorizontalAlignment="Stretch">
+
+        <!-- Enrollment Card -->
+        <Border Classes="StatCard" Margin="0,0,12,0">
+          <StackPanel Spacing="16">
+            <StackPanel Orientation="Horizontal" Spacing="12">
+              <Border Background="{DynamicResource PrimaryLightBrush}" CornerRadius="10"
+                      Width="44" Height="44">
+                <TextBlock Text="&#x1F91A;" FontSize="20"
+                           HorizontalAlignment="Center" VerticalAlignment="Center" />
+              </Border>
+              <StackPanel VerticalAlignment="Center">
+                <TextBlock Text="Enrollment" FontWeight="SemiBold" FontSize="16"
+                           Foreground="{DynamicResource TextPrimaryBrush}" />
+                <TextBlock Text="{Binding EnrolledTemplateCount, StringFormat='Templates: {0}'}"
+                           Classes="FieldLabel" />
+              </StackPanel>
+            </StackPanel>
+
+            <TextBlock Text="Step 1: Capture your fingerprint to enroll the demo student."
+                       TextWrapping="Wrap" Classes="FieldLabel" />
+
+            <Button Classes="BtnPrimary" Content="&#x1F91A;  Enroll Fingerprint"
+                    Command="{Binding EnrollCommand}"
+                    IsEnabled="{Binding !IsEnrolled}"
+                    HorizontalAlignment="Stretch" />
+
+            <TextBlock Text="Enrolled" Foreground="{DynamicResource SuccessBrush}"
+                       FontWeight="SemiBold" HorizontalAlignment="Center"
+                       IsVisible="{Binding IsEnrolled}" />
+          </StackPanel>
+        </Border>
+
+        <!-- Clock In Card -->
+        <Border Classes="StatCard" Margin="6,0">
+          <StackPanel Spacing="16">
+            <StackPanel Orientation="Horizontal" Spacing="12">
+              <Border Background="{DynamicResource SuccessLightBrush}" CornerRadius="10"
+                      Width="44" Height="44">
+                <TextBlock Text="&#x23F1;" FontSize="20"
+                           HorizontalAlignment="Center" VerticalAlignment="Center" />
+              </Border>
+              <StackPanel VerticalAlignment="Center">
+                <TextBlock Text="Clock In" FontWeight="SemiBold" FontSize="16"
+                           Foreground="{DynamicResource TextPrimaryBrush}" />
+                <TextBlock Text="{Binding LastClockIn, TargetNullValue='Not clocked in'}"
+                           Classes="FieldLabel" />
+              </StackPanel>
+            </StackPanel>
+
+            <TextBlock Text="Step 2: Scan your fingerprint to record clock-in time."
+                       TextWrapping="Wrap" Classes="FieldLabel" />
+
+            <Button Classes="BtnAccent" Content="&#x23F1;  Clock In"
+                    Command="{Binding ClockInCommand}"
+                    HorizontalAlignment="Stretch" />
+
+            <TextBlock Text="{Binding LastClockIn, StringFormat='Clocked in at {0}'}"
+                       Foreground="{DynamicResource SuccessBrush}"
+                       FontWeight="SemiBold" HorizontalAlignment="Center"
+                       IsVisible="{Binding LastClockIn, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+          </StackPanel>
+        </Border>
+
+        <!-- Clock Out Card -->
+        <Border Classes="StatCard" Margin="12,0,0,0">
+          <StackPanel Spacing="16">
+            <StackPanel Orientation="Horizontal" Spacing="12">
+              <Border Background="{DynamicResource SecondaryLightBrush}" CornerRadius="10"
+                      Width="44" Height="44">
+                <TextBlock Text="&#x23F3;" FontSize="20"
+                           HorizontalAlignment="Center" VerticalAlignment="Center" />
+              </Border>
+              <StackPanel VerticalAlignment="Center">
+                <TextBlock Text="Clock Out" FontWeight="SemiBold" FontSize="16"
+                           Foreground="{DynamicResource TextPrimaryBrush}" />
+                <TextBlock Text="{Binding LastClockOut, TargetNullValue='Not clocked out'}"
+                           Classes="FieldLabel" />
+              </StackPanel>
+            </StackPanel>
+
+            <TextBlock Text="Step 3: Scan your fingerprint to record clock-out time."
+                       TextWrapping="Wrap" Classes="FieldLabel" />
+
+            <Button Classes="BtnSecondary" Content="&#x23F3;  Clock Out"
+                    Command="{Binding ClockOutCommand}"
+                    HorizontalAlignment="Stretch" />
+
+            <TextBlock Text="{Binding LastClockOut, StringFormat='Clocked out at {0}'}"
+                       Foreground="{DynamicResource SuccessBrush}"
+                       FontWeight="SemiBold" HorizontalAlignment="Center"
+                       IsVisible="{Binding LastClockOut, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+          </StackPanel>
+        </Border>
+
+      </UniformGrid>
+
+      <!-- Fingerprint Preview -->
+      <Border Classes="GlassCard">
+        <StackPanel Spacing="16">
+          <TextBlock Text="Fingerprint Preview" Classes="SectionHeader" />
+          <Grid ColumnDefinitions="*,*" ColumnSpacing="24">
+            <StackPanel Grid.Column="0" Spacing="10">
+              <TextBlock Text="Right Hand" Classes="FieldLabel" />
+              <ItemsControl ItemsSource="{Binding RightHandSlots}">
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate>
+                    <Border Classes="GlassCardSmall" Padding="10">
+                      <Grid ColumnDefinitions="Auto,Auto,*,Auto" ColumnSpacing="10">
+                        <Ellipse Width="10" Height="10"
+                                 Fill="{Binding IsEnrolled, Converter={x:Static local:EnrollmentBrushConverter.Instance}}"
+                                 VerticalAlignment="Center" />
+                        <Border Grid.Column="1" Width="40" Height="40" CornerRadius="6"
+                                Background="{DynamicResource SurfaceBrush}"
+                                BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1">
+                          <Grid>
+                            <Image Source="{Binding ImagePath, Converter={x:Static local:ImagePathToBitmapConverter.Instance}}"
+                                   Stretch="UniformToFill"
+                                   IsVisible="{Binding HasImage}" />
+                            <TextBlock Text="&#x1F91A;" FontSize="18"
+                                       HorizontalAlignment="Center" VerticalAlignment="Center"
+                                       IsVisible="{Binding !HasImage}" />
+                          </Grid>
+                        </Border>
+                        <TextBlock Grid.Column="2" Text="{Binding Label}"
+                                   Foreground="{DynamicResource TextPrimaryBrush}" VerticalAlignment="Center" />
+                        <TextBlock Grid.Column="3" Text="{Binding StatusText}"
+                                   Classes="FieldLabel" VerticalAlignment="Center" />
+                      </Grid>
+                    </Border>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+            </StackPanel>
+
+            <StackPanel Grid.Column="1" Spacing="10">
+              <TextBlock Text="Left Hand" Classes="FieldLabel" />
+              <ItemsControl ItemsSource="{Binding LeftHandSlots}">
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate>
+                    <Border Classes="GlassCardSmall" Padding="10">
+                      <Grid ColumnDefinitions="Auto,Auto,*,Auto" ColumnSpacing="10">
+                        <Ellipse Width="10" Height="10"
+                                 Fill="{Binding IsEnrolled, Converter={x:Static local:EnrollmentBrushConverter.Instance}}"
+                                 VerticalAlignment="Center" />
+                        <Border Grid.Column="1" Width="40" Height="40" CornerRadius="6"
+                                Background="{DynamicResource SurfaceBrush}"
+                                BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1">
+                          <Grid>
+                            <Image Source="{Binding ImagePath, Converter={x:Static local:ImagePathToBitmapConverter.Instance}}"
+                                   Stretch="UniformToFill"
+                                   IsVisible="{Binding HasImage}" />
+                            <TextBlock Text="&#x1F91A;" FontSize="18"
+                                       HorizontalAlignment="Center" VerticalAlignment="Center"
+                                       IsVisible="{Binding !HasImage}" />
+                          </Grid>
+                        </Border>
+                        <TextBlock Grid.Column="2" Text="{Binding Label}"
+                                   Foreground="{DynamicResource TextPrimaryBrush}" VerticalAlignment="Center" />
+                        <TextBlock Grid.Column="3" Text="{Binding StatusText}"
+                                   Classes="FieldLabel" VerticalAlignment="Center" />
+                      </Grid>
+                    </Border>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+            </StackPanel>
+          </Grid>
+        </StackPanel>
+      </Border>
+
+      <!-- Demo Attendance Records -->
+      <Border Classes="GlassCard">
+        <StackPanel Spacing="16">
+          <Grid ColumnDefinitions="*,Auto">
+            <TextBlock Grid.Column="0" Text="Demo Attendance Records" Classes="SectionHeader" />
+            <Button Grid.Column="1" Classes="BtnSecondary" Content="&#x1F504;  Reset Demo"
+                    Command="{Binding ResetDemoCommand}" />
+          </Grid>
+
+          <DataGrid ItemsSource="{Binding AttendanceRecords}"
+                    AutoGenerateColumns="False"
+                    IsReadOnly="True"
+                    GridLinesVisibility="Horizontal"
+                    BorderThickness="0"
+                    MinHeight="150"
+                    MaxHeight="300">
+            <DataGrid.Columns>
+              <DataGridTextColumn Header="Date" Binding="{Binding Date}" Width="100" />
+              <DataGridTextColumn Header="Day" Binding="{Binding Day}" Width="100" />
+              <DataGridTextColumn Header="Reg No" Binding="{Binding RegNo}" Width="100" />
+              <DataGridTextColumn Header="Name" Binding="{Binding Name}" Width="*" />
+              <DataGridTextColumn Header="Time In" Binding="{Binding TimeIn}" Width="100" />
+              <DataGridTextColumn Header="Time Out" Binding="{Binding TimeOut}" Width="100" />
+              <DataGridTextColumn Header="Duration" Binding="{Binding Duration}" Width="80" />
+            </DataGrid.Columns>
+          </DataGrid>
+
+          <TextBlock Text="No attendance records yet. Complete enrollment and clock-in to see records."
+                     Classes="FieldLabel" HorizontalAlignment="Center"
+                     IsVisible="{Binding !AttendanceRecords.Count}" />
+        </StackPanel>
+      </Border>
+
+      <!-- Debug Log Output -->
+      <Border Classes="GlassCard">
+        <StackPanel Spacing="12">
+          <TextBlock Text="Debug Log" Classes="SectionHeader" />
+          <Border Background="{DynamicResource SurfaceBrush}"
+                  BorderBrush="{DynamicResource BorderBrush}"
+                  BorderThickness="1" CornerRadius="8" Padding="12">
+            <ScrollViewer MaxHeight="200" VerticalScrollBarVisibility="Auto">
+              <TextBlock Text="{Binding LogOutput}"
+                         FontFamily="Consolas, Monaco, monospace"
+                         FontSize="11"
+                         Foreground="{DynamicResource TextSecondaryBrush}"
+                         TextWrapping="Wrap" />
+            </ScrollViewer>
+          </Border>
+          <TextBlock Text="Logs will appear here when you perform actions. Check console for full output."
+                     Classes="FieldLabel"
+                     IsVisible="{Binding !LogOutput.Length}" />
+        </StackPanel>
+      </Border>
+
+      <!-- Info Card -->
+      <Border Classes="GlassCardSmall" Background="{DynamicResource PrimaryLightBrush}">
+        <StackPanel Orientation="Horizontal" Spacing="12">
+          <TextBlock Text="&#x1F4A1;" FontSize="18" VerticalAlignment="Top" Margin="0,2,0,0" />
+          <StackPanel Spacing="4">
+            <TextBlock Text="Demo Mode Information" FontWeight="SemiBold"
+                       Foreground="{DynamicResource TextPrimaryBrush}" />
+            <TextBlock TextWrapping="Wrap" Classes="FieldLabel">
+              This demo uses real fingerprint hardware for capture. Templates are stored in the demo tables
+              as Base64 ISO 19794-2 and can be verified against any enrolled slot.
+            </TextBlock>
+          </StackPanel>
+        </StackPanel>
+      </Border>
+
+    </StackPanel>
+  </ScrollViewer>
+</UserControl>

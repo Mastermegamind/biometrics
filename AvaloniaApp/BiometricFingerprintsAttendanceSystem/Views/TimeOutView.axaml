@@ -1,0 +1,101 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="BiometricFingerprintsAttendanceSystem.Views.TimeOutView">
+
+  <StackPanel Spacing="24">
+
+    <!-- ── Page Header ── -->
+    <StackPanel Spacing="6">
+      <TextBlock Text="Clock Out" Classes="PageTitle" />
+      <TextBlock Text="Verify fingerprint and record time of departure"
+                 Classes="PageSubtitle" />
+    </StackPanel>
+
+    <!-- ══════════ Fingerprint Scan Card ══════════ -->
+    <Border Classes="GlassCard">
+      <StackPanel Spacing="18">
+
+        <StackPanel Orientation="Horizontal" Spacing="12">
+          <Border Background="{DynamicResource PrimaryLightBrush}" CornerRadius="12"
+                  Width="40" Height="40">
+            <TextBlock Text="&#x23F3;" FontSize="20"
+                       HorizontalAlignment="Center" VerticalAlignment="Center" />
+          </Border>
+          <TextBlock Text="Fingerprint Scan" Classes="SectionHeader"
+                     VerticalAlignment="Center" />
+        </StackPanel>
+
+        <StackPanel HorizontalAlignment="Center" Spacing="10">
+          <Border Background="{DynamicResource SecondaryLightBrush}" CornerRadius="28"
+                  Width="120" Height="120">
+            <TextBlock Text="&#x1F91A;" FontSize="52"
+                       HorizontalAlignment="Center" VerticalAlignment="Center" />
+          </Border>
+          <TextBlock Text="Waiting for student thumbprint..."
+                     Classes="PageSubtitle" HorizontalAlignment="Center" />
+        </StackPanel>
+
+        <Expander Header="Manual Input (Optional)">
+          <StackPanel Spacing="12" Margin="0,12,0,0">
+            <Grid ColumnDefinitions="Auto,Auto,*">
+              <StackPanel Grid.Column="0" Spacing="4" Margin="0,0,6,0">
+                <TextBlock Text="HAND" Classes="FieldLabel" />
+                <TextBox Classes="GlassInput" Width="130" Watermark="Left / Right"
+                         Text="{Binding Hand, Mode=TwoWay}" />
+              </StackPanel>
+              <StackPanel Grid.Column="1" Spacing="4" Margin="6,0">
+                <TextBlock Text="FINGER INDEX" Classes="FieldLabel" />
+                <TextBox Classes="GlassInput" Width="130" Watermark="Thumb / Index"
+                         Text="{Binding FingerIndex, Mode=TwoWay}" />
+              </StackPanel>
+              <StackPanel Grid.Column="2" Spacing="4" Margin="6,0,0,0">
+                <TextBlock Text="TEMPLATE (BASE64)" Classes="FieldLabel" />
+                <TextBox Classes="GlassInput"
+                         Watermark="Paste ISO 19794-2 template"
+                         Text="{Binding TemplateBase64, Mode=TwoWay}" />
+              </StackPanel>
+            </Grid>
+
+            <Button Classes="BtnAccent" Content="Identify Student"
+                    Command="{Binding IdentifyCommand}" />
+          </StackPanel>
+        </Expander>
+      </StackPanel>
+    </Border>
+
+    <!-- ══════════ Student Result Card ══════════ -->
+    <Border Classes="GlassCard">
+      <StackPanel Spacing="16">
+
+        <StackPanel Orientation="Horizontal" Spacing="12">
+          <Border Background="{DynamicResource SecondaryLightBrush}" CornerRadius="12"
+                  Width="40" Height="40">
+            <TextBlock Text="&#x1F464;" FontSize="20"
+                       HorizontalAlignment="Center" VerticalAlignment="Center" />
+          </Border>
+          <TextBlock Text="Identified Student" Classes="SectionHeader"
+                     VerticalAlignment="Center" />
+        </StackPanel>
+
+        <Grid ColumnDefinitions="*,*">
+          <StackPanel Grid.Column="0" Spacing="4" Margin="0,0,8,0">
+            <TextBlock Text="REG NUMBER" Classes="FieldLabel" />
+            <TextBox Classes="GlassInput" Text="{Binding RegNo}" IsReadOnly="True" />
+          </StackPanel>
+          <StackPanel Grid.Column="1" Spacing="4" Margin="8,0,0,0">
+            <TextBlock Text="STUDENT NAME" Classes="FieldLabel" />
+            <TextBox Classes="GlassInput" Text="{Binding Name}" IsReadOnly="True" />
+          </StackPanel>
+        </Grid>
+
+        <Button Classes="BtnPrimary" Content="&#x23F3;  Record Time-Out"
+                Command="{Binding TimeOutCommand}" />
+      </StackPanel>
+    </Border>
+
+    <!-- ── Status ── -->
+    <TextBlock Text="{Binding StatusMessage}" Classes="ErrorText"
+               IsVisible="{Binding StatusMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+
+  </StackPanel>
+</UserControl>

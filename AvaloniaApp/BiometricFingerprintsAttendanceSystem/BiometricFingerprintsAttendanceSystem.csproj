@@ -1,0 +1,52 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFrameworks>net8.0;net9.0;net10.0</TargetFrameworks>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Avalonia" Version="11.3.11" />
+    <PackageReference Include="Avalonia.Desktop" Version="11.3.11" />
+    <PackageReference Include="Avalonia.Themes.Fluent" Version="11.3.11" />
+    <PackageReference Include="Avalonia.Controls.DataGrid" Version="11.3.11" />
+    <PackageReference Include="DotNetEnv" Version="3.1.1" />
+    <PackageReference Include="MySqlConnector" Version="2.5.0" />
+    <PackageReference Include="OpenCvSharp4" Version="4.11.0.20250507" />
+    <PackageReference Include="OpenCvSharp4.runtime.win" Version="4.11.0.20250507" />
+  </ItemGroup>
+
+  <!-- Windows-only fingerprint SDKs: enable by setting IncludeFingerprintSdks=true and providing SDK paths. -->
+  <ItemGroup Condition="'$(IncludeFingerprintSdks)' == 'true'">
+    <Reference Include="DPFPDevNET">
+      <HintPath>$(DigitalPersonaSdkPath)\DPFPDevNET.dll</HintPath>
+      <Private>true</Private>
+    </Reference>
+    <Reference Include="DPFPEngNET">
+      <HintPath>$(DigitalPersonaSdkPath)\DPFPEngNET.dll</HintPath>
+      <Private>true</Private>
+    </Reference>
+    <Reference Include="DPFPGuiNET">
+      <HintPath>$(DigitalPersonaSdkPath)\DPFPGuiNET.dll</HintPath>
+      <Private>true</Private>
+    </Reference>
+    <Reference Include="DPFPShrNET">
+      <HintPath>$(DigitalPersonaSdkPath)\DPFPShrNET.dll</HintPath>
+      <Private>true</Private>
+    </Reference>
+    <Reference Include="DPFPVerNET">
+      <HintPath>$(DigitalPersonaSdkPath)\DPFPVerNET.dll</HintPath>
+      <Private>true</Private>
+    </Reference>
+    <Reference Include="MFS100">
+      <HintPath>$(MantraSdkPath)\MFS100.dll</HintPath>
+      <Private>true</Private>
+    </Reference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <AvaloniaResource Include="Assets/**" />
+    <None Include="appsettings.json" CopyToOutputDirectory="Always" />
+  </ItemGroup>
+</Project>
