@@ -9,6 +9,7 @@ using BiometricFingerprintsAttendanceSystem.Services.Fingerprint;
 using BiometricFingerprintsAttendanceSystem.ViewModels;
 using BiometricFingerprintsAttendanceSystem.Views;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using System;
 using System.Threading.Tasks;
 
@@ -54,7 +55,7 @@ public partial class App : Application
 
         // Configuration & State
         services.AddSingleton(config);
-        services.AddSingleton(new AppState(config));
+        services.AddSingleton<AppState>();
 
         // Database
         services.AddSingleton<DbConnectionFactory>();
@@ -77,6 +78,26 @@ public partial class App : Application
                 return new DemoBiometricsApiClient(apiClient, config.DemoStudentRegNo, config.DemoStudentName, config.DemoStudentClass);
             });
         }
+
+        // ViewModels
+        services.AddTransient<LoginViewModel>();
+        services.AddTransient<MainWindowViewModel>();
+        services.AddTransient<RegisterViewModel>();
+        services.AddTransient<VerificationViewModel>();
+        services.AddTransient<TimeOutViewModel>();
+        services.AddTransient<UserHomeViewModel>();
+        services.AddTransient<AdminHomeViewModel>();
+        services.AddTransient<AdminRegistrationViewModel>();
+        services.AddTransient<EnrollmentViewModel>();
+        services.AddTransient<DemoViewModel>();
+        services.AddTransient<AttendanceReportViewModel>();
+
+        // Logging
+        services.AddLogging(logging =>
+        {
+            logging.AddConsole();
+            logging.SetMinimumLevel(LogLevel.Information);
+        });
 
         return services.BuildServiceProvider();
     }

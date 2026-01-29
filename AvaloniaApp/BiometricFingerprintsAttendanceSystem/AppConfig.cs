@@ -275,101 +275,40 @@ public sealed record AppConfig(
         ref string demoStudentName,
         ref string demoStudentClass)
     {
-        var envConnection = Environment.GetEnvironmentVariable("BIOCLOCK_CONNECTION_STRING");
-        if (!string.IsNullOrWhiteSpace(envConnection))
-        {
-            connectionString = envConnection;
-        }
+        // Use a simpler approach without lambdas to avoid ref parameter issues
+        ApplyEnvVariable("BIOCLOCK_CONNECTION_STRING", ref connectionString);
+        ApplyEnvVariable("BIOCLOCK_FINGERPRINT_DEVICE", ref fingerprintDevice);
+        ApplyEnvVariable("BIOCLOCK_ENABLE_FINGERPRINT_SDKS", ref enableFingerprintSdks);
+        ApplyEnvVariable("BIOCLOCK_API_BASE_URL", ref apiBaseUrl);
+        ApplyEnvVariable("BIOCLOCK_API_KEY", ref apiKey);
+        ApplyEnvVariable("BIOCLOCK_API_KEY_HEADER", ref apiKeyHeader);
+        ApplyEnvVariable("BIOCLOCK_STUDENT_LOOKUP_PATH", ref studentLookupPath);
+        ApplyEnvVariable("BIOCLOCK_ENROLLMENT_STATUS_PATH", ref enrollmentStatusPath);
+        ApplyEnvVariable("BIOCLOCK_ENROLLMENT_SUBMIT_PATH", ref enrollmentSubmitPath);
+        ApplyEnvVariable("BIOCLOCK_IDENTIFY_PATH", ref identifyPath);
+        ApplyEnvVariable("BIOCLOCK_DEMO_MODE", ref enableDemoMode);
+        ApplyEnvVariable("BIOCLOCK_DEMO_ADMIN_EMAIL", ref demoAdminEmail);
+        ApplyEnvVariable("BIOCLOCK_DEMO_ADMIN_PASSWORD", ref demoAdminPassword);
+        ApplyEnvVariable("BIOCLOCK_DEMO_STUDENT_REGNO", ref demoStudentRegNo);
+        ApplyEnvVariable("BIOCLOCK_DEMO_STUDENT_NAME", ref demoStudentName);
+        ApplyEnvVariable("BIOCLOCK_DEMO_STUDENT_CLASS", ref demoStudentClass);
+    }
 
-        var envDevice = Environment.GetEnvironmentVariable("BIOCLOCK_FINGERPRINT_DEVICE");
-        if (!string.IsNullOrWhiteSpace(envDevice))
+    private static void ApplyEnvVariable(string envKey, ref string value)
+    {
+        var envValue = Environment.GetEnvironmentVariable(envKey);
+        if (!string.IsNullOrWhiteSpace(envValue))
         {
-            fingerprintDevice = envDevice;
+            value = envValue;
         }
+    }
 
-        var envSdks = Environment.GetEnvironmentVariable("BIOCLOCK_ENABLE_FINGERPRINT_SDKS");
-        if (bool.TryParse(envSdks, out var enableSdks))
+    private static void ApplyEnvVariable(string envKey, ref bool value)
+    {
+        var envValue = Environment.GetEnvironmentVariable(envKey);
+        if (bool.TryParse(envValue, out var parsedValue))
         {
-            enableFingerprintSdks = enableSdks;
-        }
-
-        var envApiBase = Environment.GetEnvironmentVariable("BIOCLOCK_API_BASE_URL");
-        if (!string.IsNullOrWhiteSpace(envApiBase))
-        {
-            apiBaseUrl = envApiBase;
-        }
-
-        var envApiKey = Environment.GetEnvironmentVariable("BIOCLOCK_API_KEY");
-        if (!string.IsNullOrWhiteSpace(envApiKey))
-        {
-            apiKey = envApiKey;
-        }
-
-        var envApiHeader = Environment.GetEnvironmentVariable("BIOCLOCK_API_KEY_HEADER");
-        if (!string.IsNullOrWhiteSpace(envApiHeader))
-        {
-            apiKeyHeader = envApiHeader;
-        }
-
-        var envStudentLookup = Environment.GetEnvironmentVariable("BIOCLOCK_STUDENT_LOOKUP_PATH");
-        if (!string.IsNullOrWhiteSpace(envStudentLookup))
-        {
-            studentLookupPath = envStudentLookup;
-        }
-
-        var envEnrollmentStatus = Environment.GetEnvironmentVariable("BIOCLOCK_ENROLLMENT_STATUS_PATH");
-        if (!string.IsNullOrWhiteSpace(envEnrollmentStatus))
-        {
-            enrollmentStatusPath = envEnrollmentStatus;
-        }
-
-        var envEnrollmentSubmit = Environment.GetEnvironmentVariable("BIOCLOCK_ENROLLMENT_SUBMIT_PATH");
-        if (!string.IsNullOrWhiteSpace(envEnrollmentSubmit))
-        {
-            enrollmentSubmitPath = envEnrollmentSubmit;
-        }
-
-        var envIdentify = Environment.GetEnvironmentVariable("BIOCLOCK_IDENTIFY_PATH");
-        if (!string.IsNullOrWhiteSpace(envIdentify))
-        {
-            identifyPath = envIdentify;
-        }
-
-        // Demo mode environment variables
-        var envDemoMode = Environment.GetEnvironmentVariable("BIOCLOCK_DEMO_MODE");
-        if (bool.TryParse(envDemoMode, out var demoMode))
-        {
-            enableDemoMode = demoMode;
-        }
-
-        var envDemoAdminEmail = Environment.GetEnvironmentVariable("BIOCLOCK_DEMO_ADMIN_EMAIL");
-        if (!string.IsNullOrWhiteSpace(envDemoAdminEmail))
-        {
-            demoAdminEmail = envDemoAdminEmail;
-        }
-
-        var envDemoAdminPassword = Environment.GetEnvironmentVariable("BIOCLOCK_DEMO_ADMIN_PASSWORD");
-        if (!string.IsNullOrWhiteSpace(envDemoAdminPassword))
-        {
-            demoAdminPassword = envDemoAdminPassword;
-        }
-
-        var envDemoStudentRegNo = Environment.GetEnvironmentVariable("BIOCLOCK_DEMO_STUDENT_REGNO");
-        if (!string.IsNullOrWhiteSpace(envDemoStudentRegNo))
-        {
-            demoStudentRegNo = envDemoStudentRegNo;
-        }
-
-        var envDemoStudentName = Environment.GetEnvironmentVariable("BIOCLOCK_DEMO_STUDENT_NAME");
-        if (!string.IsNullOrWhiteSpace(envDemoStudentName))
-        {
-            demoStudentName = envDemoStudentName;
-        }
-
-        var envDemoStudentClass = Environment.GetEnvironmentVariable("BIOCLOCK_DEMO_STUDENT_CLASS");
-        if (!string.IsNullOrWhiteSpace(envDemoStudentClass))
-        {
-            demoStudentClass = envDemoStudentClass;
+            value = parsedValue;
         }
     }
 }
