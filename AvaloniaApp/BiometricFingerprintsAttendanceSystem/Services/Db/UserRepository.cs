@@ -1,3 +1,4 @@
+using BCrypt.Net;
 using MySqlConnector;
 
 namespace BiometricFingerprintsAttendanceSystem.Services.Db;
@@ -38,12 +39,23 @@ public sealed class UserRepository
             await conn.OpenAsync(cancellationToken);
 
             await using var cmd = conn.CreateCommand();
-            cmd.CommandText = "SELECT usertype FROM registration WHERE username = @username AND password = @password";
+            cmd.CommandText = "SELECT usertype, password FROM admin_users WHERE username = @username LIMIT 1";
             cmd.Parameters.AddWithValue("@username", username);
-            cmd.Parameters.AddWithValue("@password", password);
 
-            var result = await cmd.ExecuteScalarAsync(cancellationToken);
-            return result?.ToString();
+            await using var reader = await cmd.ExecuteReaderAsync(cancellationToken);
+            if (!await reader.ReadAsync(cancellationToken))
+            {
+                return null;
+            }
+
+            var userType = reader.IsDBNull(0) ? null : reader.GetString(0);
+            var storedPassword = reader.IsDBNull(1) ? null : reader.GetString(1);
+            if (string.IsNullOrWhiteSpace(userType) || string.IsNullOrWhiteSpace(storedPassword))
+            {
+                return null;
+            }
+
+            return BCrypt.Verify(password, storedPassword) ? userType : null;
         }
         catch
         {

@@ -1,4 +1,5 @@
 using BiometricFingerprintsAttendanceSystem.Services;
+using BCrypt.Net;
 
 namespace BiometricFingerprintsAttendanceSystem.ViewModels;
 
@@ -101,8 +102,8 @@ public sealed class AdminRegistrationViewModel : ViewModelBase
         await conn.OpenAsync();
 
         await using var check = conn.CreateCommand();
-        check.CommandText = "SELECT 1 FROM registration WHERE name = @name LIMIT 1";
-        check.Parameters.AddWithValue("@name", Name.Trim());
+        check.CommandText = "SELECT 1 FROM admin_users WHERE username = @username LIMIT 1";
+        check.Parameters.AddWithValue("@username", Username.Trim());
         var exists = await check.ExecuteScalarAsync();
 
         if (exists is not null)
@@ -112,10 +113,12 @@ public sealed class AdminRegistrationViewModel : ViewModelBase
         }
 
         await using var cmd = conn.CreateCommand();
-        cmd.CommandText = "INSERT INTO registration (username, usertype, password, name, contactno, email) VALUES (@username, @usertype, @password, @name, @contactno, @email)";
+        var passwordHash = BCrypt.HashPassword(Password);
+
+        cmd.CommandText = "INSERT INTO admin_users (username, usertype, password, name, contactno, email) VALUES (@username, @usertype, @password, @name, @contactno, @email)";
         cmd.Parameters.AddWithValue("@username", Username.Trim());
         cmd.Parameters.AddWithValue("@usertype", UserType.Trim());
-        cmd.Parameters.AddWithValue("@password", Password);
+        cmd.Parameters.AddWithValue("@password", passwordHash);
         cmd.Parameters.AddWithValue("@name", Name.Trim());
         cmd.Parameters.AddWithValue("@contactno", ContactNo.Trim());
         cmd.Parameters.AddWithValue("@email", Email.Trim());
