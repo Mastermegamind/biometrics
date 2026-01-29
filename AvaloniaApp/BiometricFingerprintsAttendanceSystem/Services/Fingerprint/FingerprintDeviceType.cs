@@ -32,8 +32,16 @@ public enum FingerprintDeviceType
     // ==================== Linux Devices (libfprint/fprintd) ====================
 
     /// <summary>
-    /// Linux fprintd/libfprint compatible devices.
+    /// Direct libfprint2 bindings for Linux.
+    /// Provides raw template access for application-managed enrollment.
+    /// Preferred over Fprintd for database-stored templates.
+    /// </summary>
+    LibfprintDirect,
+
+    /// <summary>
+    /// Linux fprintd/libfprint compatible devices (system-managed).
     /// Auto-detects any device supported by libfprint.
+    /// Note: Does not provide raw template data - use LibfprintDirect instead.
     /// </summary>
     Fprintd,
 

@@ -363,11 +363,21 @@ public class LiveEnrollmentViewModel : ViewModelBase
                 return;
             }
 
-            // Create template from captured sample
-            var templateData = await _services.Fingerprint.CreateTemplateAsync(captureResult.SampleData);
+            // Create template from captured sample (or use capture template if available)
+            var templateData = captureResult.TemplateData;
             if (templateData == null || templateData.Length == 0)
             {
-                StatusMessage = "Failed to create fingerprint template. Please try again.";
+                templateData = await _services.Fingerprint.CreateTemplateAsync(captureResult.SampleData);
+            }
+            if ((templateData == null || templateData.Length == 0) &&
+                captureResult.SampleData != null && captureResult.SampleData.Length > 0)
+            {
+                templateData = captureResult.SampleData;
+                _logger.LogWarning("Live enrollment using sample data as template fallback for RegNo {RegNo}", RegNo.Trim());
+            }
+            if (templateData == null || templateData.Length == 0)
+            {
+                StatusMessage = "Fingerprint device did not provide a template. Enrollment not supported on this device.";
                 _logger.LogWarning("Live enrollment template creation failed for RegNo {RegNo}", RegNo.Trim());
                 return;
             }

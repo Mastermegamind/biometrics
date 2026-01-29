@@ -177,7 +177,8 @@ public partial class App : Application
 
         if (OperatingSystem.IsLinux())
         {
-            return new LinuxFprintdService();
+            // Prefer direct libfprint bindings for raw template access
+            return new LinuxLibfprintService();
         }
 
         return new NotSupportedFingerprintService();
@@ -200,17 +201,20 @@ public partial class App : Application
     {
         return device switch
         {
+            // Direct libfprint bindings - preferred for raw template access
+            FingerprintDeviceType.LibfprintDirect => new LinuxLibfprintService(),
+            FingerprintDeviceType.DigitalPersona4500 => new LinuxLibfprintService(),
+            FingerprintDeviceType.ValiditySensors => new LinuxLibfprintService(),
+            FingerprintDeviceType.Goodix => new LinuxLibfprintService(),
+            FingerprintDeviceType.Synaptics => new LinuxLibfprintService(),
+            FingerprintDeviceType.Elan => new LinuxLibfprintService(),
+            FingerprintDeviceType.FocalTech => new LinuxLibfprintService(),
+            FingerprintDeviceType.LighTuning => new LinuxLibfprintService(),
+            FingerprintDeviceType.Upek => new LinuxLibfprintService(),
+            // Fprintd - system-managed enrollment (no raw templates)
             FingerprintDeviceType.Fprintd => new LinuxFprintdService(),
-            FingerprintDeviceType.ValiditySensors => new LinuxFprintdService(),
-            FingerprintDeviceType.Goodix => new LinuxFprintdService(),
-            FingerprintDeviceType.Synaptics => new LinuxFprintdService(),
-            FingerprintDeviceType.Elan => new LinuxFprintdService(),
-            FingerprintDeviceType.FocalTech => new LinuxFprintdService(),
-            FingerprintDeviceType.LighTuning => new LinuxFprintdService(),
-            FingerprintDeviceType.Upek => new LinuxFprintdService(),
-            FingerprintDeviceType.DigitalPersona4500 => new LinuxFprintdService(),
             FingerprintDeviceType.None => new NotSupportedFingerprintService(),
-            _ => new NotSupportedFingerprintService()
+            _ => new LinuxLibfprintService() // Default to direct bindings
         };
     }
 
@@ -233,7 +237,8 @@ public partial class App : Application
             "digitalpersona" or "dp4500" or "uareu" => FingerprintDeviceType.DigitalPersona4500,
             "mantra" or "mfs100" => FingerprintDeviceType.MantraMfs100,
             "wbf" or "windowshello" or "hello" => FingerprintDeviceType.WindowsBiometric,
-            "libfprint" or "fprint" => FingerprintDeviceType.Fprintd,
+            "libfprint-direct" or "libfprint2" or "direct" => FingerprintDeviceType.LibfprintDirect,
+            "libfprint" or "fprint" or "fprintd" => FingerprintDeviceType.Fprintd,
             "validity" => FingerprintDeviceType.ValiditySensors,
             "authentec" => FingerprintDeviceType.Upek,
             "detect" or "autodetect" => FingerprintDeviceType.Auto,

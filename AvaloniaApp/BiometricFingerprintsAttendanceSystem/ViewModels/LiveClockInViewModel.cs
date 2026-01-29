@@ -166,11 +166,21 @@ public class LiveClockInViewModel : ViewModelBase
 
             StatusMessage = "Verifying identity...";
 
-            // Create template from captured sample
-            var templateData = await _services.Fingerprint.CreateTemplateAsync(captureResult.SampleData);
+            // Create template from captured sample (or use capture template if available)
+            var templateData = captureResult.TemplateData;
             if (templateData == null || templateData.Length == 0)
             {
-                StatusMessage = "Failed to process fingerprint. Please try again.";
+                templateData = await _services.Fingerprint.CreateTemplateAsync(captureResult.SampleData);
+            }
+            if ((templateData == null || templateData.Length == 0) &&
+                captureResult.SampleData != null && captureResult.SampleData.Length > 0)
+            {
+                templateData = captureResult.SampleData;
+                _logger.LogWarning("Live clock-in using sample data as template fallback");
+            }
+            if (templateData == null || templateData.Length == 0)
+            {
+                StatusMessage = "Fingerprint device did not provide a template. Please try again.";
                 _logger.LogWarning("Live clock-in template creation failed");
                 return;
             }
