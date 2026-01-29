@@ -2,6 +2,7 @@ using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
+using BiometricFingerprintsAttendanceSystem.Services.Net;
 
 namespace BiometricFingerprintsAttendanceSystem.Services.Data;
 
@@ -19,11 +20,13 @@ public class OnlineDataProvider
     {
         _config = config;
         _logger = logger;
-        _http = new HttpClient
-        {
-            BaseAddress = new Uri(config.ApiBaseUrl ?? "http://localhost:5000"),
-            Timeout = TimeSpan.FromSeconds(config.ApiTimeoutSeconds > 0 ? config.ApiTimeoutSeconds : 30)
-        };
+        var baseAddress = new Uri(config.ApiBaseUrl ?? "http://localhost:5000");
+        var timeout = TimeSpan.FromSeconds(config.ApiTimeoutSeconds > 0 ? config.ApiTimeoutSeconds : 30);
+        _http = HttpClientFactory.CreateWithBaseAddress(
+            baseAddress,
+            timeout,
+            string.IsNullOrWhiteSpace(config.ApiKeyHeader) ? "X-API-Key" : config.ApiKeyHeader,
+            config.ApiKey);
 
         _jsonOptions = new JsonSerializerOptions
         {
@@ -31,12 +34,7 @@ public class OnlineDataProvider
             PropertyNamingPolicy = JsonNamingPolicy.CamelCase
         };
 
-        // Add API key if configured
-        if (!string.IsNullOrEmpty(config.ApiKey))
-        {
-            var headerName = string.IsNullOrWhiteSpace(config.ApiKeyHeader) ? "X-API-Key" : config.ApiKeyHeader;
-            _http.DefaultRequestHeaders.Add(headerName, config.ApiKey);
-        }
+        // API key is configured via HttpClientFactory
     }
 
     /// <summary>

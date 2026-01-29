@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Runtime.InteropServices;
 using BiometricFingerprintsAttendanceSystem.Services.Fingerprint.Libfprint;
 using Microsoft.Extensions.Logging;
@@ -17,12 +18,21 @@ public sealed class LinuxLibfprintService : FingerprintServiceBase
     private CancellationTokenSource? _captureCts;
     private bool _isCapturing;
     private readonly SemaphoreSlim _deviceLock = new(1, 1);
+    private readonly SemaphoreSlim _initLock = new(1, 1);
     private readonly ILogger<LinuxLibfprintService>? _logger;
+    private readonly int _captureTimeoutSeconds;
+    private readonly bool _forceReopenBeforeCapture;
+    private bool _captureInProgress;
+    private bool _captureHardTimedOut;
     private bool _disposed;
 
-    public LinuxLibfprintService(ILogger<LinuxLibfprintService>? logger = null)
+    private static readonly LibfprintNative.FpEnrollProgressCallback s_enrollProgressCallback = OnEnrollProgress;
+
+    public LinuxLibfprintService(ILogger<LinuxLibfprintService>? logger = null, int captureTimeoutSeconds = 30, bool forceReopenBeforeCapture = true)
     {
         _logger = logger;
+        _captureTimeoutSeconds = captureTimeoutSeconds > 0 ? captureTimeoutSeconds : 30;
+        _forceReopenBeforeCapture = forceReopenBeforeCapture;
     }
 
     public override bool IsDeviceAvailable =>
@@ -38,90 +48,127 @@ public sealed class LinuxLibfprintService : FingerprintServiceBase
 
     public override async Task<bool> InitializeAsync(CancellationToken cancellationToken = default)
     {
-        return await Task.Run(() =>
+        await _initLock.WaitAsync(cancellationToken);
+        try
         {
-            try
+            if (_disposed)
             {
-                _logger?.LogInformation("Initializing libfprint2 fingerprint service");
+                return false;
+            }
 
-                // Create context
-                var contextPtr = LibfprintNative.fp_context_new();
-                if (contextPtr == IntPtr.Zero)
+            if (_device is { IsOpen: true })
+            {
+                OnDeviceStatusChanged(FingerprintDeviceStatus.Ready);
+                return true;
+            }
+
+            return await Task.Run(() =>
+            {
+                try
                 {
-                    _logger?.LogError("Failed to create libfprint context");
-                    OnDeviceStatusChanged(FingerprintDeviceStatus.Error);
-                    return false;
-                }
+                    _logger?.LogInformation("Initializing libfprint2 fingerprint service");
 
-                _context = new FpContextHandle(contextPtr, ownsHandle: true);
+                    // Create context
+                    var contextPtr = LibfprintNative.fp_context_new();
+                    if (contextPtr == IntPtr.Zero)
+                    {
+                        _logger?.LogError("Failed to create libfprint context");
+                        OnDeviceStatusChanged(FingerprintDeviceStatus.Error);
+                        return false;
+                    }
 
-                // Enumerate devices
-                LibfprintNative.fp_context_enumerate(_context.DangerousGetHandle());
+                    _context = new FpContextHandle(contextPtr, ownsHandle: true);
 
-                var devicesPtr = LibfprintNative.fp_context_get_devices(_context.DangerousGetHandle());
-                if (devicesPtr == IntPtr.Zero)
-                {
-                    _logger?.LogWarning("No fingerprint devices found (null device list)");
-                    OnDeviceStatusChanged(FingerprintDeviceStatus.Disconnected);
-                    return false;
-                }
+                    // Enumerate devices
+                    LibfprintNative.fp_context_enumerate(_context.DangerousGetHandle());
+
+                    var devicesPtr = LibfprintNative.fp_context_get_devices(_context.DangerousGetHandle());
+                    if (devicesPtr == IntPtr.Zero)
+                    {
+                        _logger?.LogWarning("No fingerprint devices found (null device list)");
+                        OnDeviceStatusChanged(FingerprintDeviceStatus.Disconnected);
+                        return false;
+                    }
 
                 var deviceCount = LibfprintNative.GetPtrArrayLength(devicesPtr);
                 _logger?.LogInformation("Found {DeviceCount} fingerprint device(s)", deviceCount);
 
                 if (deviceCount == 0)
                 {
-                    _logger?.LogWarning("No fingerprint devices found");
-                    OnDeviceStatusChanged(FingerprintDeviceStatus.Disconnected);
-                    return false;
-                }
+                    _logger?.LogWarning("No fingerprint devices found, retrying in 2 seconds...");
+                    Thread.Sleep(TimeSpan.FromSeconds(2));
 
-                // Get first device
-                var devicePtr = LibfprintNative.GetPtrArrayIndex(devicesPtr, 0);
-                if (devicePtr == IntPtr.Zero)
-                {
-                    _logger?.LogError("Failed to get device pointer");
-                    OnDeviceStatusChanged(FingerprintDeviceStatus.Disconnected);
-                    return false;
-                }
-
-                _device = new FpDeviceHandle(devicePtr, _context);
-
-                // Open device
-                if (!LibfprintNative.fp_device_open_sync(devicePtr, IntPtr.Zero, out var error))
-                {
-                    if (error != IntPtr.Zero)
+                    LibfprintNative.fp_context_enumerate(_context.DangerousGetHandle());
+                    devicesPtr = LibfprintNative.fp_context_get_devices(_context.DangerousGetHandle());
+                    if (devicesPtr == IntPtr.Zero)
                     {
-                        var ex = LibfprintException.FromGError(error);
-                        _logger?.LogError("Failed to open device: {Message}", ex.Message);
+                        _logger?.LogWarning("No fingerprint devices found (null device list after retry)");
+                        OnDeviceStatusChanged(FingerprintDeviceStatus.Disconnected);
+                        return false;
                     }
+
+                    deviceCount = LibfprintNative.GetPtrArrayLength(devicesPtr);
+                    _logger?.LogInformation("Found {DeviceCount} fingerprint device(s) after retry", deviceCount);
+
+                    if (deviceCount == 0)
+                    {
+                        _logger?.LogWarning("No fingerprint devices found after retry");
+                        OnDeviceStatusChanged(FingerprintDeviceStatus.Disconnected);
+                        return false;
+                    }
+                }
+
+                    // Get first device
+                    var devicePtr = LibfprintNative.GetPtrArrayIndex(devicesPtr, 0);
+                    if (devicePtr == IntPtr.Zero)
+                    {
+                        _logger?.LogError("Failed to get device pointer");
+                        OnDeviceStatusChanged(FingerprintDeviceStatus.Disconnected);
+                        return false;
+                    }
+
+                    _device = new FpDeviceHandle(devicePtr, _context);
+
+                    // Open device
+                    if (!LibfprintNative.fp_device_open_sync(devicePtr, IntPtr.Zero, out var error))
+                    {
+                        if (error != IntPtr.Zero)
+                        {
+                            var ex = LibfprintException.FromGError(error);
+                            _logger?.LogError("Failed to open device: {Message}", ex.Message);
+                        }
+                        OnDeviceStatusChanged(FingerprintDeviceStatus.Error);
+                        return false;
+                    }
+
+                    _device.MarkOpen();
+
+                    // Populate device info
+                    _deviceInfo = CreateDeviceInfo(devicePtr);
+                    _logger?.LogInformation("Opened device: {DeviceName} ({Driver})",
+                        _deviceInfo.ProductName, _deviceInfo.Driver);
+
+                    OnDeviceStatusChanged(FingerprintDeviceStatus.Ready);
+                    return true;
+                }
+                catch (DllNotFoundException ex)
+                {
+                    _logger?.LogError(ex, "libfprint2 library not found. Install with: sudo apt install libfprint-2-2");
                     OnDeviceStatusChanged(FingerprintDeviceStatus.Error);
                     return false;
                 }
-
-                _device.MarkOpen();
-
-                // Populate device info
-                _deviceInfo = CreateDeviceInfo(devicePtr);
-                _logger?.LogInformation("Opened device: {DeviceName} ({Driver})",
-                    _deviceInfo.ProductName, _deviceInfo.Driver);
-
-                OnDeviceStatusChanged(FingerprintDeviceStatus.Ready);
-                return true;
-            }
-            catch (DllNotFoundException ex)
-            {
-                _logger?.LogError(ex, "libfprint2 library not found. Install with: sudo apt install libfprint-2-2");
-                OnDeviceStatusChanged(FingerprintDeviceStatus.Error);
-                return false;
-            }
-            catch (Exception ex)
-            {
-                _logger?.LogError(ex, "Failed to initialize libfprint service");
-                OnDeviceStatusChanged(FingerprintDeviceStatus.Error);
-                return false;
-            }
-        }, cancellationToken);
+                catch (Exception ex)
+                {
+                    _logger?.LogError(ex, "Failed to initialize libfprint service");
+                    OnDeviceStatusChanged(FingerprintDeviceStatus.Error);
+                    return false;
+                }
+            }, cancellationToken);
+        }
+        finally
+        {
+            _initLock.Release();
+        }
     }
 
     private static FingerprintDeviceInfo CreateDeviceInfo(IntPtr devicePtr)
@@ -176,18 +223,50 @@ public sealed class LinuxLibfprintService : FingerprintServiceBase
         {
             return await Task.Run(() =>
             {
+                _logger?.LogInformation("CaptureAsync started");
+
+                if (_captureHardTimedOut)
+                {
+                    return FingerprintCaptureResult.Failed(
+                        FingerprintCaptureStatus.DeviceError,
+                        "Previous capture timed out. Please restart the device or app.");
+                }
+
+                if (_captureInProgress)
+                {
+                    return FingerprintCaptureResult.Failed(
+                        FingerprintCaptureStatus.DeviceError,
+                        "Fingerprint capture already in progress.");
+                }
+
                 var devicePtr = _device.DangerousGetHandle();
 
+                if (_forceReopenBeforeCapture && !ReopenDeviceForCapture(devicePtr))
+                {
+                    _logger?.LogWarning("CaptureAsync aborted: failed to reopen device");
+                    return FingerprintCaptureResult.Failed(FingerprintCaptureStatus.DeviceError,
+                        "Failed to reopen fingerprint device.");
+                }
+
                 // Check if device supports direct capture
-                if (LibfprintNative.fp_device_supports_capture(devicePtr))
+                // Prefer enrollment-based capture to obtain a template.
+                _logger?.LogInformation("CaptureAsync entering enrollment mode");
+                var enrollResult = CaptureViaEnroll(devicePtr);
+                if (enrollResult.Success)
+                {
+                    return enrollResult;
+                }
+
+                // If enrollment isn't supported, fall back to image capture.
+                if (enrollResult.Status == FingerprintCaptureStatus.DeviceError &&
+                    enrollResult.ErrorMessage != null &&
+                    enrollResult.ErrorMessage.Contains("not supported", StringComparison.OrdinalIgnoreCase) &&
+                    LibfprintNative.fp_device_supports_capture(devicePtr))
                 {
                     return CaptureViaImage(devicePtr);
                 }
-                else
-                {
-                    // Fall back to enrollment-based capture
-                    return CaptureViaEnroll(devicePtr);
-                }
+
+                return enrollResult;
             }, cancellationToken);
         }
         finally
@@ -201,11 +280,20 @@ public sealed class LinuxLibfprintService : FingerprintServiceBase
         OnDeviceStatusChanged(FingerprintDeviceStatus.WaitingForFinger);
         _logger?.LogInformation("Starting fingerprint capture (image mode)");
 
-        var imagePtr = LibfprintNative.fp_device_capture_sync(
-            devicePtr,
-            waitForFinger: true,
-            IntPtr.Zero,
-            out var error);
+        var stopwatch = Stopwatch.StartNew();
+        var error = IntPtr.Zero;
+        using var cancellable = new GcancellableScope(TimeSpan.FromSeconds(_captureTimeoutSeconds));
+        var imagePtr = RunWithGMainContext(() =>
+        {
+            var result = LibfprintNative.fp_device_capture_sync(
+                devicePtr,
+                waitForFinger: true,
+                cancellable.Handle,
+                out var err);
+            error = err;
+            return result;
+        });
+        _logger?.LogInformation("Capture (image mode) completed in {ElapsedMs} ms", stopwatch.ElapsedMilliseconds);
 
         if (imagePtr == IntPtr.Zero)
         {
@@ -243,22 +331,7 @@ public sealed class LinuxLibfprintService : FingerprintServiceBase
 
             _logger?.LogInformation("Captured image: {Width}x{Height}, quality: {Quality}", width, height, quality);
 
-            // For image-based capture, we need to do enrollment to get a template
-            // Free the image first
-            LibfprintNative.fp_image_unref(imagePtr);
-            imagePtr = IntPtr.Zero;
-
-            // Now do enrollment to get template
-            var enrollResult = CaptureViaEnroll(devicePtr);
-            if (enrollResult.Success && enrollResult.TemplateData != null)
-            {
-                return FingerprintCaptureResult.Successful(
-                    sampleData: enrollResult.TemplateData,
-                    templateData: enrollResult.TemplateData,
-                    quality: quality);
-            }
-
-            // Return image data even if template creation failed
+            // Return image data only; template creation requires enrollment mode.
             return FingerprintCaptureResult.Successful(
                 sampleData: imageData,
                 templateData: null,
@@ -290,69 +363,124 @@ public sealed class LinuxLibfprintService : FingerprintServiceBase
 
         try
         {
+            _captureInProgress = true;
             // Set finger position
             LibfprintNative.fp_print_set_finger(templatePrint, FpFinger.RightIndexFinger);
 
-            var printPtr = LibfprintNative.fp_device_enroll_sync(
-                devicePtr,
-                templatePrint,
-                IntPtr.Zero,
-                IntPtr.Zero,  // No progress callback for now
-                IntPtr.Zero,
-                out var error);
-
-            OnDeviceStatusChanged(FingerprintDeviceStatus.Processing);
-
-            if (printPtr == IntPtr.Zero)
-            {
-                OnDeviceStatusChanged(FingerprintDeviceStatus.Ready);
-                if (error != IntPtr.Zero)
-                {
-                    var ex = LibfprintException.FromGError(error);
-                    _logger?.LogWarning("Enrollment capture failed: {Message}", ex.Message);
-                    return FingerprintCaptureResult.Failed(ex.ToCaptureStatus(), ex.Message);
-                }
-                return FingerprintCaptureResult.Failed(FingerprintCaptureStatus.DeviceError,
-                    "Enrollment returned null print.");
-            }
-
-            // Serialize the print to bytes
-            var serializedPtr = LibfprintNative.fp_print_serialize(printPtr, out var length, out error);
-            if (serializedPtr == IntPtr.Zero)
-            {
-                LibfprintNative.fp_print_unref(printPtr);
-                OnDeviceStatusChanged(FingerprintDeviceStatus.Ready);
-                if (error != IntPtr.Zero)
-                {
-                    var ex = LibfprintException.FromGError(error);
-                    _logger?.LogWarning("Template serialization failed: {Message}", ex.Message);
-                }
-                return FingerprintCaptureResult.Failed(FingerprintCaptureStatus.DeviceError,
-                    "Failed to serialize fingerprint template.");
-            }
-
+            var stopwatch = Stopwatch.StartNew();
+            var error = IntPtr.Zero;
+            using var cancellable = new GcancellableScope(TimeSpan.FromSeconds(_captureTimeoutSeconds));
+            var handle = GCHandle.Alloc(this);
             try
             {
-                var templateData = new byte[length];
-                Marshal.Copy(serializedPtr, templateData, 0, (int)length);
+                var userData = GCHandle.ToIntPtr(handle);
+                IntPtr printPtr = IntPtr.Zero;
+                Exception? enrollException = null;
+                var enrollTask = Task.Run(() =>
+                {
+                    try
+                    {
+                        printPtr = RunWithGMainContext(() =>
+                        {
+                            var result = LibfprintNative.fp_device_enroll_sync(
+                                devicePtr,
+                                templatePrint,
+                                cancellable.Handle,
+                                s_enrollProgressCallback,
+                                userData,
+                                out var err);
+                            error = err;
+                            return result;
+                        });
+                    }
+                    catch (Exception ex)
+                    {
+                        enrollException = ex;
+                    }
+                });
 
-                _logger?.LogInformation("Captured template: {Length} bytes", length);
+                var completed = enrollTask.Wait(TimeSpan.FromSeconds(_captureTimeoutSeconds));
+                if (!completed)
+                {
+                    _captureHardTimedOut = true;
+                    _logger?.LogWarning("Enrollment hard timeout after {TimeoutSeconds} seconds", _captureTimeoutSeconds);
+                    OnDeviceStatusChanged(FingerprintDeviceStatus.Ready);
+                    return FingerprintCaptureResult.Failed(FingerprintCaptureStatus.Timeout,
+                        $"Enrollment timed out after {_captureTimeoutSeconds} seconds. Restart the device or app.");
+                }
 
-                OnDeviceStatusChanged(FingerprintDeviceStatus.Ready);
+                if (enrollException != null)
+                {
+                    _logger?.LogError(enrollException, "Enrollment capture crashed");
+                    OnDeviceStatusChanged(FingerprintDeviceStatus.Ready);
+                    return FingerprintCaptureResult.Failed(FingerprintCaptureStatus.DeviceError,
+                        "Enrollment capture crashed.");
+                }
 
-                return FingerprintCaptureResult.Successful(
-                    sampleData: templateData,
-                    templateData: templateData,
-                    quality: 80);
+                _logger?.LogInformation("Enrollment capture completed in {ElapsedMs} ms", stopwatch.ElapsedMilliseconds);
+                if (cancellable.TimedOut)
+                {
+                    _logger?.LogWarning("Enrollment capture timed out after {TimeoutSeconds} seconds", _captureTimeoutSeconds);
+                }
+
+                OnDeviceStatusChanged(FingerprintDeviceStatus.Processing);
+
+                if (printPtr == IntPtr.Zero)
+                {
+                    OnDeviceStatusChanged(FingerprintDeviceStatus.Ready);
+                    if (error != IntPtr.Zero)
+                    {
+                        var ex = LibfprintException.FromGError(error);
+                        _logger?.LogWarning("Enrollment capture failed: {Message}", ex.Message);
+                        return FingerprintCaptureResult.Failed(ex.ToCaptureStatus(), ex.Message);
+                    }
+                    return FingerprintCaptureResult.Failed(FingerprintCaptureStatus.DeviceError,
+                        "Enrollment returned null print.");
+                }
+
+                // Serialize the print to bytes
+                var serializedPtr = LibfprintNative.fp_print_serialize(printPtr, out var length, out error);
+                if (serializedPtr == IntPtr.Zero)
+                {
+                    LibfprintNative.fp_print_unref(printPtr);
+                    OnDeviceStatusChanged(FingerprintDeviceStatus.Ready);
+                    if (error != IntPtr.Zero)
+                    {
+                        var ex = LibfprintException.FromGError(error);
+                        _logger?.LogWarning("Template serialization failed: {Message}", ex.Message);
+                    }
+                    return FingerprintCaptureResult.Failed(FingerprintCaptureStatus.DeviceError,
+                        "Failed to serialize fingerprint template.");
+                }
+
+                try
+                {
+                    var templateData = new byte[length];
+                    Marshal.Copy(serializedPtr, templateData, 0, (int)length);
+
+                    _logger?.LogInformation("Captured template: {Length} bytes", length);
+
+                    OnDeviceStatusChanged(FingerprintDeviceStatus.Ready);
+
+                    return FingerprintCaptureResult.Successful(
+                        sampleData: templateData,
+                        templateData: templateData,
+                        quality: 80);
+                }
+                finally
+                {
+                    LibfprintNative.g_free(serializedPtr);
+                    LibfprintNative.fp_print_unref(printPtr);
+                }
             }
             finally
             {
-                LibfprintNative.g_free(serializedPtr);
-                LibfprintNative.fp_print_unref(printPtr);
+                handle.Free();
             }
         }
         finally
         {
+            _captureInProgress = false;
             LibfprintNative.fp_print_unref(templatePrint);
         }
     }
@@ -376,6 +504,202 @@ public sealed class LinuxLibfprintService : FingerprintServiceBase
         // Serialized libfprint templates are typically larger and have specific structure
         // This is a heuristic check
         return data.Length > 100;
+    }
+
+    private bool ReopenDeviceForCapture(IntPtr devicePtr)
+    {
+        if (_device is null)
+        {
+            _logger?.LogWarning("ReopenDeviceForCapture: device handle missing");
+            return false;
+        }
+
+        if (_device.IsOpen)
+        {
+            _logger?.LogInformation("ReopenDeviceForCapture: closing device before capture");
+            if (!CloseDevice(devicePtr))
+            {
+                _logger?.LogWarning("ReopenDeviceForCapture: close failed");
+                return false;
+            }
+            _logger?.LogInformation("ReopenDeviceForCapture: close succeeded");
+        }
+
+        _logger?.LogInformation("ReopenDeviceForCapture: opening device before capture");
+        var opened = OpenDevice(devicePtr);
+        if (opened)
+        {
+            _logger?.LogInformation("ReopenDeviceForCapture: open succeeded");
+        }
+        else
+        {
+            _logger?.LogWarning("ReopenDeviceForCapture: open failed");
+        }
+        return opened;
+    }
+
+    private bool OpenDevice(IntPtr devicePtr)
+    {
+        var error = IntPtr.Zero;
+        var stopwatch = Stopwatch.StartNew();
+        using var cancellable = new GcancellableScope(TimeSpan.FromSeconds(_captureTimeoutSeconds));
+        _logger?.LogInformation("OpenDevice: calling fp_device_open_sync");
+        var opened = RunWithGMainContext(() =>
+        {
+            var ok = LibfprintNative.fp_device_open_sync(devicePtr, cancellable.Handle, out var err);
+            error = err;
+            return ok;
+        });
+        _logger?.LogInformation("OpenDevice: completed in {ElapsedMs} ms", stopwatch.ElapsedMilliseconds);
+        if (cancellable.TimedOut)
+        {
+            _logger?.LogWarning("OpenDevice: timed out after {TimeoutSeconds} seconds", _captureTimeoutSeconds);
+        }
+        if (!opened)
+        {
+            if (error != IntPtr.Zero)
+            {
+                var ex = LibfprintException.FromGError(error);
+                _logger?.LogError("Failed to open device: {Message}", ex.Message);
+            }
+            OnDeviceStatusChanged(FingerprintDeviceStatus.Error);
+            return false;
+        }
+
+        _device?.MarkOpen();
+        return true;
+    }
+
+    private bool CloseDevice(IntPtr devicePtr)
+    {
+        var error = IntPtr.Zero;
+        var stopwatch = Stopwatch.StartNew();
+        using var cancellable = new GcancellableScope(TimeSpan.FromSeconds(_captureTimeoutSeconds));
+        _logger?.LogInformation("CloseDevice: calling fp_device_close_sync");
+        var closed = RunWithGMainContext(() =>
+        {
+            var ok = LibfprintNative.fp_device_close_sync(devicePtr, cancellable.Handle, out var err);
+            error = err;
+            return ok;
+        });
+        _logger?.LogInformation("CloseDevice: completed in {ElapsedMs} ms", stopwatch.ElapsedMilliseconds);
+        if (cancellable.TimedOut)
+        {
+            _logger?.LogWarning("CloseDevice: timed out after {TimeoutSeconds} seconds", _captureTimeoutSeconds);
+        }
+        if (!closed)
+        {
+            if (error != IntPtr.Zero)
+            {
+                var ex = LibfprintException.FromGError(error);
+                _logger?.LogWarning("Failed to close device: {Message}", ex.Message);
+            }
+            return false;
+        }
+
+        _device?.MarkClosed();
+        return true;
+    }
+
+    private static T RunWithGMainContext<T>(Func<T> action)
+    {
+        var context = LibfprintNative.g_main_context_new();
+        if (context != IntPtr.Zero)
+        {
+            LibfprintNative.g_main_context_push_thread_default(context);
+        }
+
+        try
+        {
+            return action();
+        }
+        finally
+        {
+            if (context != IntPtr.Zero)
+            {
+                LibfprintNative.g_main_context_pop_thread_default(context);
+                LibfprintNative.g_main_context_unref(context);
+            }
+        }
+    }
+
+    private static void OnEnrollProgress(IntPtr device, int completed, IntPtr print, int stage, IntPtr userData, IntPtr error)
+    {
+        if (userData == IntPtr.Zero)
+        {
+            return;
+        }
+
+        try
+        {
+            var handle = GCHandle.FromIntPtr(userData);
+            if (handle.Target is LinuxLibfprintService service)
+            {
+                service._logger?.LogInformation("Enroll progress callback fired");
+                service._logger?.LogInformation("Enroll progress: completed={Completed}, stage={Stage}", completed, stage);
+                if (error != IntPtr.Zero)
+                {
+                    var ex = LibfprintException.FromGError(error);
+                    service._logger?.LogWarning("Enroll progress error: {Message}", ex.Message);
+                }
+            }
+        }
+        catch
+        {
+            // Avoid throwing from native callback.
+        }
+    }
+
+    private sealed class GcancellableScope : IDisposable
+    {
+        private readonly Timer? _timer;
+        private bool _disposed;
+
+        public IntPtr Handle { get; private set; }
+        public bool TimedOut { get; private set; }
+
+        public GcancellableScope(TimeSpan timeout)
+        {
+            try
+            {
+                Handle = LibfprintNative.g_cancellable_new();
+            }
+            catch (EntryPointNotFoundException)
+            {
+                Handle = IntPtr.Zero;
+            }
+            if (Handle == IntPtr.Zero)
+            {
+                return;
+            }
+
+            if (timeout > TimeSpan.Zero)
+            {
+                _timer = new Timer(_ => Cancel(), null, timeout, Timeout.InfiniteTimeSpan);
+            }
+
+        }
+
+        public void Dispose()
+        {
+            if (_disposed) return;
+            _disposed = true;
+
+            _timer?.Dispose();
+            if (Handle != IntPtr.Zero)
+            {
+                LibfprintNative.g_object_unref(Handle);
+            }
+        }
+
+        private void Cancel()
+        {
+            if (Handle != IntPtr.Zero)
+            {
+                TimedOut = true;
+                LibfprintNative.g_cancellable_cancel(Handle);
+            }
+        }
     }
 
     public override async Task<FingerprintVerifyResult> VerifyAsync(
@@ -407,14 +731,22 @@ public sealed class LinuxLibfprintService : FingerprintServiceBase
                     OnDeviceStatusChanged(FingerprintDeviceStatus.WaitingForFinger);
                     _logger?.LogInformation("Starting fingerprint verification");
 
-                    var result = LibfprintNative.fp_device_verify_sync(
-                        devicePtr,
-                        templatePtr,
-                        IntPtr.Zero,
-                        out var matchedPrintPtr,
-                        IntPtr.Zero,
-                        IntPtr.Zero,
-                        out var error);
+                    var error = IntPtr.Zero;
+                    var matchedPrintPtr = IntPtr.Zero;
+                    var result = RunWithGMainContext(() =>
+                    {
+                        var ok = LibfprintNative.fp_device_verify_sync(
+                            devicePtr,
+                            templatePtr,
+                            IntPtr.Zero,
+                            out var matched,
+                            IntPtr.Zero,
+                            IntPtr.Zero,
+                            out var err);
+                        matchedPrintPtr = matched;
+                        error = err;
+                        return ok;
+                    });
 
                     OnDeviceStatusChanged(FingerprintDeviceStatus.Ready);
 
@@ -509,15 +841,25 @@ public sealed class LinuxLibfprintService : FingerprintServiceBase
                         OnDeviceStatusChanged(FingerprintDeviceStatus.WaitingForFinger);
                         _logger?.LogInformation("Starting fingerprint identification against {Count} templates", printPtrs.Count);
 
-                        var result = LibfprintNative.fp_device_identify_sync(
-                            devicePtr,
-                            printsArray,
-                            IntPtr.Zero,
-                            out var matchedPrintPtr,
-                            out var printPtr,
-                            IntPtr.Zero,
-                            IntPtr.Zero,
-                            out var error);
+                        var error = IntPtr.Zero;
+                        var matchedPrintPtr = IntPtr.Zero;
+                        var printPtr = IntPtr.Zero;
+                        var result = RunWithGMainContext(() =>
+                        {
+                            var ok = LibfprintNative.fp_device_identify_sync(
+                                devicePtr,
+                                printsArray,
+                                IntPtr.Zero,
+                                out var matched,
+                                out var print,
+                                IntPtr.Zero,
+                                IntPtr.Zero,
+                                out var err);
+                            matchedPrintPtr = matched;
+                            printPtr = print;
+                            error = err;
+                            return ok;
+                        });
 
                         OnDeviceStatusChanged(FingerprintDeviceStatus.Ready);
 
@@ -739,6 +1081,7 @@ public sealed class LinuxLibfprintService : FingerprintServiceBase
             _captureCts?.Cancel();
             _captureCts?.Dispose();
             _deviceLock.Dispose();
+            _initLock.Dispose();
 
             _device?.Dispose();
             _context?.Dispose();

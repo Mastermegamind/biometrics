@@ -11,6 +11,7 @@ internal static partial class LibfprintNative
     private const string LibFprint = "libfprint-2.so.2";
     private const string LibGLib = "libglib-2.0.so.0";
     private const string LibGObject = "libgobject-2.0.so.0";
+    private const string LibGio = "libgio-2.0.so.0";
 
     // ==================== Context Management ====================
 
@@ -133,14 +134,26 @@ internal static partial class LibfprintNative
     [LibraryImport(LibGObject, EntryPoint = "g_object_unref")]
     internal static partial void fp_print_unref(IntPtr print);
 
+    [LibraryImport(LibGObject, EntryPoint = "g_object_unref")]
+    internal static partial void g_object_unref(IntPtr obj);
+
     // ==================== Enrollment Operations ====================
+
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    internal delegate void FpEnrollProgressCallback(
+        IntPtr device,
+        int completed,
+        IntPtr print,
+        int stage,
+        IntPtr userData,
+        IntPtr error);
 
     [LibraryImport(LibFprint, EntryPoint = "fp_device_enroll_sync")]
     internal static partial IntPtr fp_device_enroll_sync(
         IntPtr device,
         IntPtr templatePrint,
         IntPtr cancellable,
-        IntPtr progressCallback,
+        FpEnrollProgressCallback progressCallback,
         IntPtr progressData,
         out IntPtr error);
 
@@ -178,6 +191,15 @@ internal static partial class LibfprintNative
 
     [LibraryImport(LibGLib, EntryPoint = "g_free")]
     internal static partial void g_free(IntPtr mem);
+
+    [LibraryImport(LibGLib, EntryPoint = "g_quark_to_string")]
+    internal static partial IntPtr g_quark_to_string(uint quark);
+
+    [LibraryImport(LibGio, EntryPoint = "g_cancellable_new")]
+    internal static partial IntPtr g_cancellable_new();
+
+    [LibraryImport(LibGio, EntryPoint = "g_cancellable_cancel")]
+    internal static partial void g_cancellable_cancel(IntPtr cancellable);
 
     // ==================== GMainContext (required for sync operations) ====================
 

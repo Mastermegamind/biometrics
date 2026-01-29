@@ -24,7 +24,8 @@ public sealed record AppConfig(
     int ApiTimeoutSeconds,
     int MaxFailedLoginAttempts,
     int LockoutMinutes,
-    int MinimumFingersRequired)
+    int MinimumFingersRequired,
+    int CaptureTimeoutSeconds)
 {
     private const string DefaultConnectionString = "SERVER=localhost; DATABASE=mda_biometrics; userid=root; PASSWORD=root; PORT=3306;";
     private const string DefaultApiBaseUrl = "https://portal.mydreamsacademy.com.ng";
@@ -72,6 +73,7 @@ public sealed record AppConfig(
         var maxFailedLoginAttempts = 5;
         var lockoutMinutes = 15;
         var minimumFingersRequired = 2;
+        var captureTimeoutSeconds = 30;
 
         ApplyEnvOverrides(
             ref connectionString, ref fingerprintDevice, ref enableFingerprintSdks,
@@ -79,7 +81,8 @@ public sealed record AppConfig(
             ref studentLookupPath, ref enrollmentStatusPath, ref enrollmentSubmitPath, ref identifyPath,
             ref enableDemoMode, ref demoAdminEmail, ref demoAdminPassword,
             ref demoStudentRegNo, ref demoStudentName, ref demoStudentClass,
-            ref syncMode, ref apiTimeoutSeconds, ref maxFailedLoginAttempts, ref lockoutMinutes, ref minimumFingersRequired);
+            ref syncMode, ref apiTimeoutSeconds, ref maxFailedLoginAttempts, ref lockoutMinutes, ref minimumFingersRequired,
+            ref captureTimeoutSeconds);
 
         return new AppConfig(
             connectionString, fingerprintDevice, enableFingerprintSdks,
@@ -87,7 +90,8 @@ public sealed record AppConfig(
             studentLookupPath, enrollmentStatusPath, enrollmentSubmitPath, identifyPath,
             enableDemoMode, demoAdminEmail, demoAdminPassword,
             demoStudentRegNo, demoStudentName, demoStudentClass,
-            syncMode, apiTimeoutSeconds, maxFailedLoginAttempts, lockoutMinutes, minimumFingersRequired);
+            syncMode, apiTimeoutSeconds, maxFailedLoginAttempts, lockoutMinutes, minimumFingersRequired,
+            captureTimeoutSeconds);
     }
 
     private static AppConfig ParseConfig(JsonDocument doc)
@@ -113,6 +117,7 @@ public sealed record AppConfig(
         var maxFailedLoginAttempts = 5;
         var lockoutMinutes = 15;
         var minimumFingersRequired = 2;
+        var captureTimeoutSeconds = 30;
 
         // Parse ConnectionStrings
         if (doc.RootElement.TryGetProperty("ConnectionStrings", out var conns) &&
@@ -142,6 +147,11 @@ public sealed record AppConfig(
             if (fingerprint.TryGetProperty("MinimumFingers", out var minFingers) && minFingers.ValueKind == JsonValueKind.Number)
             {
                 minimumFingersRequired = minFingers.GetInt32();
+            }
+
+            if (fingerprint.TryGetProperty("CaptureTimeoutSeconds", out var captureTimeout) && captureTimeout.ValueKind == JsonValueKind.Number)
+            {
+                captureTimeoutSeconds = captureTimeout.GetInt32();
             }
         }
 
@@ -252,7 +262,8 @@ public sealed record AppConfig(
             ref studentLookupPath, ref enrollmentStatusPath, ref enrollmentSubmitPath, ref identifyPath,
             ref enableDemoMode, ref demoAdminEmail, ref demoAdminPassword,
             ref demoStudentRegNo, ref demoStudentName, ref demoStudentClass,
-            ref syncMode, ref apiTimeoutSeconds, ref maxFailedLoginAttempts, ref lockoutMinutes, ref minimumFingersRequired);
+            ref syncMode, ref apiTimeoutSeconds, ref maxFailedLoginAttempts, ref lockoutMinutes, ref minimumFingersRequired,
+            ref captureTimeoutSeconds);
 
         return new AppConfig(
             connectionString, fingerprintDevice, enableFingerprintSdks,
@@ -260,7 +271,8 @@ public sealed record AppConfig(
             studentLookupPath, enrollmentStatusPath, enrollmentSubmitPath, identifyPath,
             enableDemoMode, demoAdminEmail, demoAdminPassword,
             demoStudentRegNo, demoStudentName, demoStudentClass,
-            syncMode, apiTimeoutSeconds, maxFailedLoginAttempts, lockoutMinutes, minimumFingersRequired);
+            syncMode, apiTimeoutSeconds, maxFailedLoginAttempts, lockoutMinutes, minimumFingersRequired,
+            captureTimeoutSeconds);
     }
 
     private static void ApplyEnvOverrides(
@@ -284,7 +296,8 @@ public sealed record AppConfig(
         ref int apiTimeoutSeconds,
         ref int maxFailedLoginAttempts,
         ref int lockoutMinutes,
-        ref int minimumFingersRequired)
+        ref int minimumFingersRequired,
+        ref int captureTimeoutSeconds)
     {
         ApplyEnvVariable("BIOCLOCK_CONNECTION_STRING", ref connectionString);
         ApplyEnvVariable("BIOCLOCK_FINGERPRINT_DEVICE", ref fingerprintDevice);
@@ -308,6 +321,7 @@ public sealed record AppConfig(
         ApplyEnvVariable("BIOCLOCK_AUTH_MAX_FAILED", ref maxFailedLoginAttempts);
         ApplyEnvVariable("BIOCLOCK_AUTH_LOCKOUT_MINUTES", ref lockoutMinutes);
         ApplyEnvVariable("BIOCLOCK_MIN_FINGERS", ref minimumFingersRequired);
+        ApplyEnvVariable("BIOCLOCK_CAPTURE_TIMEOUT", ref captureTimeoutSeconds);
     }
 
     private static void ApplyEnvVariable(string envKey, ref string value)

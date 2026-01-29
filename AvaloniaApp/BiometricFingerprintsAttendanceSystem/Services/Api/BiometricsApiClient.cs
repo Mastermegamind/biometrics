@@ -1,5 +1,6 @@
 using System.Net.Http.Json;
 using System.Text.Json;
+using BiometricFingerprintsAttendanceSystem.Services.Net;
 
 namespace BiometricFingerprintsAttendanceSystem.Services.Api;
 
@@ -11,16 +12,12 @@ public sealed class BiometricsApiClient
     public BiometricsApiClient(ApiSettings settings)
     {
         _settings = settings;
-        _http = new HttpClient
-        {
-            BaseAddress = new Uri(settings.BaseUrl.TrimEnd('/') + "/")
-        };
-
-        if (!string.IsNullOrWhiteSpace(settings.ApiKey))
-        {
-            _http.DefaultRequestHeaders.Remove(settings.ApiKeyHeader);
-            _http.DefaultRequestHeaders.Add(settings.ApiKeyHeader, settings.ApiKey);
-        }
+        var baseAddress = new Uri(settings.BaseUrl.TrimEnd('/') + "/");
+        _http = HttpClientFactory.CreateWithBaseAddress(
+            baseAddress,
+            timeout: null,
+            apiKeyHeader: settings.ApiKeyHeader,
+            apiKey: settings.ApiKey);
     }
 
     public async Task<StudentProfile?> GetStudentByRegAsync(string regNo, CancellationToken cancellationToken = default)

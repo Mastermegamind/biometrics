@@ -40,6 +40,7 @@ public partial class App : Application
             var services = new ServiceRegistry(serviceProvider);
             serviceProvider.GetRequiredService<SyncManager>().Start();
             serviceProvider.GetRequiredService<EnrollmentCacheRefresher>().Start();
+            _ = Task.Run(async () => await services.Fingerprint.InitializeAsync());
 
             var mainWindow = new MainWindow
             {
@@ -82,7 +83,7 @@ public partial class App : Application
 
         // Services
         services.AddSingleton<ICameraService, OpenCvCameraService>();
-        services.AddSingleton<IFingerprintService>(sp => ResolveFingerprintService(config));
+        services.AddSingleton<IFingerprintService>(sp => ResolveFingerprintService(config, sp));
         services.AddSingleton<BiometricsApiClient>();
 
         if (config.EnableDemoMode)
@@ -139,7 +140,7 @@ public partial class App : Application
         return services.BuildServiceProvider();
     }
 
-    private static IFingerprintService ResolveFingerprintService(AppConfig config)
+    private static IFingerprintService ResolveFingerprintService(AppConfig config, IServiceProvider provider)
     {
         if (!TryParseDevice(config.FingerprintDevice, out var device))
         {
@@ -148,7 +149,10 @@ public partial class App : Application
 
         if (device == FingerprintDeviceType.Auto)
         {
-            return ResolveAutoDetectedService(config);
+            var logger = OperatingSystem.IsLinux()
+                ? provider.GetService<ILogger<LinuxLibfprintService>>()
+                : null;
+            return ResolveAutoDetectedService(config, logger);
         }
 
         if (OperatingSystem.IsWindows())
@@ -158,13 +162,14 @@ public partial class App : Application
 
         if (OperatingSystem.IsLinux())
         {
-            return ResolveLinuxService(device);
+            var logger = provider.GetService<ILogger<LinuxLibfprintService>>();
+            return ResolveLinuxService(device, logger, config.CaptureTimeoutSeconds, forceReopenBeforeCapture: false);
         }
 
         return new NotSupportedFingerprintService();
     }
 
-    private static IFingerprintService ResolveAutoDetectedService(AppConfig config)
+    private static IFingerprintService ResolveAutoDetectedService(AppConfig config, ILogger<LinuxLibfprintService>? logger = null)
     {
         if (OperatingSystem.IsWindows())
         {
@@ -178,7 +183,7 @@ public partial class App : Application
         if (OperatingSystem.IsLinux())
         {
             // Prefer direct libfprint bindings for raw template access
-            return new LinuxLibfprintService();
+            return new LinuxLibfprintService(logger, config.CaptureTimeoutSeconds, forceReopenBeforeCapture: false);
         }
 
         return new NotSupportedFingerprintService();
@@ -197,24 +202,24 @@ public partial class App : Application
         };
     }
 
-    private static IFingerprintService ResolveLinuxService(FingerprintDeviceType device)
+    private static IFingerprintService ResolveLinuxService(FingerprintDeviceType device, ILogger<LinuxLibfprintService>? logger = null, int captureTimeoutSeconds = 30, bool forceReopenBeforeCapture = false)
     {
         return device switch
         {
             // Direct libfprint bindings - preferred for raw template access
-            FingerprintDeviceType.LibfprintDirect => new LinuxLibfprintService(),
-            FingerprintDeviceType.DigitalPersona4500 => new LinuxLibfprintService(),
-            FingerprintDeviceType.ValiditySensors => new LinuxLibfprintService(),
-            FingerprintDeviceType.Goodix => new LinuxLibfprintService(),
-            FingerprintDeviceType.Synaptics => new LinuxLibfprintService(),
-            FingerprintDeviceType.Elan => new LinuxLibfprintService(),
-            FingerprintDeviceType.FocalTech => new LinuxLibfprintService(),
-            FingerprintDeviceType.LighTuning => new LinuxLibfprintService(),
-            FingerprintDeviceType.Upek => new LinuxLibfprintService(),
+            FingerprintDeviceType.LibfprintDirect => new LinuxLibfprintService(logger, captureTimeoutSeconds, forceReopenBeforeCapture),
+            FingerprintDeviceType.DigitalPersona4500 => new LinuxLibfprintService(logger, captureTimeoutSeconds, forceReopenBeforeCapture),
+            FingerprintDeviceType.ValiditySensors => new LinuxLibfprintService(logger, captureTimeoutSeconds, forceReopenBeforeCapture),
+            FingerprintDeviceType.Goodix => new LinuxLibfprintService(logger, captureTimeoutSeconds, forceReopenBeforeCapture),
+            FingerprintDeviceType.Synaptics => new LinuxLibfprintService(logger, captureTimeoutSeconds, forceReopenBeforeCapture),
+            FingerprintDeviceType.Elan => new LinuxLibfprintService(logger, captureTimeoutSeconds, forceReopenBeforeCapture),
+            FingerprintDeviceType.FocalTech => new LinuxLibfprintService(logger, captureTimeoutSeconds, forceReopenBeforeCapture),
+            FingerprintDeviceType.LighTuning => new LinuxLibfprintService(logger, captureTimeoutSeconds, forceReopenBeforeCapture),
+            FingerprintDeviceType.Upek => new LinuxLibfprintService(logger, captureTimeoutSeconds, forceReopenBeforeCapture),
             // Fprintd - system-managed enrollment (no raw templates)
             FingerprintDeviceType.Fprintd => new LinuxFprintdService(),
             FingerprintDeviceType.None => new NotSupportedFingerprintService(),
-            _ => new LinuxLibfprintService() // Default to direct bindings
+            _ => new LinuxLibfprintService(logger, captureTimeoutSeconds, forceReopenBeforeCapture) // Default to direct bindings
         };
     }
 

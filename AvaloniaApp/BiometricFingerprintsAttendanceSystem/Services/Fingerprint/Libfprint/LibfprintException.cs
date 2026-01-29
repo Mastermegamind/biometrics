@@ -37,16 +37,28 @@ public sealed class LibfprintException : Exception
         try
         {
             // GError structure: { GQuark domain; gint code; gchar *message; }
-            var code = Marshal.ReadInt32(errorPtr, IntPtr.Size);
-            var messagePtr = Marshal.ReadIntPtr(errorPtr, IntPtr.Size + sizeof(int));
-            var message = Marshal.PtrToStringUTF8(messagePtr) ?? "Unknown error";
+            var error = Marshal.PtrToStructure<GError>(errorPtr);
+            // Avoid dereferencing error.Message here; some drivers return invalid pointers.
+            var domainNamePtr = LibfprintNative.g_quark_to_string(error.Domain);
+            var domainValue = domainNamePtr == IntPtr.Zero
+                ? $"0x{error.Domain:X}"
+                : (Marshal.PtrToStringUTF8(domainNamePtr) ?? $"0x{error.Domain:X}");
+            var message = $"libfprint error (domain={domainValue}, code={error.Code})";
 
-            return new LibfprintException(message, (FpDeviceError)code);
+            return new LibfprintException(message, (FpDeviceError)error.Code);
         }
         finally
         {
             LibfprintNative.g_error_free(errorPtr);
         }
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private readonly struct GError
+    {
+        public readonly uint Domain;
+        public readonly int Code;
+        public readonly IntPtr Message;
     }
 
     /// <summary>
