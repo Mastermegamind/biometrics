@@ -2,12 +2,15 @@ using System.Windows.Input;
 using Avalonia.Media.Imaging;
 using BiometricFingerprintsAttendanceSystem.Services;
 using BiometricFingerprintsAttendanceSystem.Services.Data;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace BiometricFingerprintsAttendanceSystem.ViewModels;
 
 public class LiveClockOutViewModel : ViewModelBase
 {
     private readonly IServiceRegistry _services;
+    private readonly ILogger<LiveClockOutViewModel> _logger;
 
     private string _studentName = string.Empty;
     private string _studentRegNo = string.Empty;
@@ -25,6 +28,8 @@ public class LiveClockOutViewModel : ViewModelBase
     public LiveClockOutViewModel(IServiceRegistry services)
     {
         _services = services;
+        _logger = services.Provider.GetService(typeof(ILogger<LiveClockOutViewModel>)) as ILogger<LiveClockOutViewModel>
+            ?? NullLogger<LiveClockOutViewModel>.Instance;
 
         ClockOutCommand = new AsyncRelayCommand(ProcessClockOutAsync, () => !IsProcessing);
         ResetCommand = new RelayCommand(Reset);
@@ -133,14 +138,17 @@ public class LiveClockOutViewModel : ViewModelBase
             if (!initResult)
             {
                 StatusMessage = "Fingerprint scanner not available";
+                _logger.LogWarning("Live clock-out scanner init failed");
                 return;
             }
 
             StatusMessage = "Ready. Place your finger on the scanner...";
+            _logger.LogInformation("Live clock-out scanner ready");
         }
         catch (Exception ex)
         {
             StatusMessage = $"Scanner error: {ex.Message}";
+            _logger.LogError(ex, "Live clock-out scanner error");
         }
     }
 
@@ -149,6 +157,7 @@ public class LiveClockOutViewModel : ViewModelBase
         IsProcessing = true;
         ShowResult = false;
         StatusMessage = "Scanning fingerprint...";
+        _logger.LogInformation("Live clock-out started");
 
         try
         {
@@ -157,6 +166,7 @@ public class LiveClockOutViewModel : ViewModelBase
             if (!captureResult.Success || captureResult.SampleData == null)
             {
                 StatusMessage = captureResult.Message ?? "Capture failed. Please try again.";
+                _logger.LogWarning("Live clock-out capture failed: {Message}", captureResult.Message ?? "Capture failed");
                 return;
             }
 
@@ -174,6 +184,7 @@ public class LiveClockOutViewModel : ViewModelBase
             if (templateData == null || templateData.Length == 0)
             {
                 StatusMessage = "Failed to process fingerprint. Please try again.";
+                _logger.LogWarning("Live clock-out template creation failed");
                 return;
             }
 
@@ -190,6 +201,7 @@ public class LiveClockOutViewModel : ViewModelBase
 
             if (result.Success && result.Student != null)
             {
+                _logger.LogInformation("Live clock-out success for RegNo {RegNo}", result.Student.RegNo);
                 IsSuccess = true;
                 StudentName = result.Student.Name;
                 StudentRegNo = result.Student.RegNo;
@@ -217,6 +229,10 @@ public class LiveClockOutViewModel : ViewModelBase
                         using var stream = new MemoryStream(photoResult.Data);
                         StudentPhoto = new Bitmap(stream);
                     }
+                    else
+                    {
+                        _logger.LogWarning("Live clock-out photo fetch failed for RegNo {RegNo}: {Message}", result.Student.RegNo, photoResult.Message ?? "No photo data");
+                    }
                 }
 
                 StatusMessage = "Clock-out successful!";
@@ -233,17 +249,20 @@ public class LiveClockOutViewModel : ViewModelBase
                 StudentName = result.Student?.Name ?? "";
                 StudentRegNo = result.Student?.RegNo ?? "";
                 StatusMessage = "You haven't clocked in today! Please clock in first.";
+                _logger.LogWarning("Live clock-out not clocked in for RegNo {RegNo}", StudentRegNo);
             }
             else
             {
                 IsSuccess = false;
                 StatusMessage = result.Message ?? "Fingerprint not recognized. Please try again.";
+                _logger.LogWarning("Live clock-out failed: {Message}", result.Message ?? "Unknown error");
             }
         }
         catch (Exception ex)
         {
             IsSuccess = false;
             StatusMessage = $"Error: {ex.Message}";
+            _logger.LogError(ex, "Live clock-out error");
         }
         finally
         {

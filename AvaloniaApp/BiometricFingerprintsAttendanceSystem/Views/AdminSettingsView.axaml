@@ -1,0 +1,51 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="BiometricFingerprintsAttendanceSystem.Views.AdminSettingsView">
+
+  <StackPanel Spacing="24">
+    <StackPanel Spacing="6">
+      <TextBlock Text="Admin Settings" Classes="PageTitle" />
+      <TextBlock Text="Update configuration (restart required)" Classes="PageSubtitle" />
+    </StackPanel>
+
+    <Border Classes="GlassCard">
+      <StackPanel Spacing="20">
+        <TextBlock Text="Configuration" Classes="SectionHeader" />
+
+        <Grid ColumnDefinitions="*,*" RowDefinitions="Auto,Auto">
+          <StackPanel Grid.Row="0" Grid.Column="0" Spacing="4" Margin="0,0,8,16">
+            <TextBlock Text="API BASE URL" Classes="FieldLabel" />
+            <TextBox Classes="GlassInput" Watermark="https://api.example.com"
+                     Text="{Binding ApiBaseUrl, Mode=TwoWay}" />
+          </StackPanel>
+
+          <StackPanel Grid.Row="0" Grid.Column="1" Spacing="4" Margin="8,0,0,16">
+            <TextBlock Text="SYNC MODE" Classes="FieldLabel" />
+            <TextBox Classes="GlassInput" Watermark="OnlineFirst"
+                     Text="{Binding SyncMode, Mode=TwoWay}" />
+          </StackPanel>
+
+          <StackPanel Grid.Row="1" Grid.Column="0" Spacing="4" Margin="0,0,8,0">
+            <TextBlock Text="FINGERPRINT DEVICE" Classes="FieldLabel" />
+            <TextBox Classes="GlassInput" Watermark="Auto"
+                     Text="{Binding FingerprintDevice, Mode=TwoWay}" />
+          </StackPanel>
+
+          <StackPanel Grid.Row="1" Grid.Column="1" Spacing="4" Margin="8,0,0,0">
+            <TextBlock Text="DEMO MODE" Classes="FieldLabel" />
+            <CheckBox Content="Enabled" IsChecked="{Binding DemoEnabled, Mode=TwoWay}" />
+          </StackPanel>
+        </Grid>
+
+        <Separator Background="{DynamicResource SeparatorBrush}" Height="1" Margin="0,4" />
+
+        <StackPanel Orientation="Horizontal" Spacing="12">
+          <Button Classes="BtnPrimary" Content="Save Settings" Command="{Binding SaveCommand}" />
+          <TextBlock Text="{Binding StatusMessage}" Classes="ErrorText"
+                     VerticalAlignment="Center"
+                     IsVisible="{Binding StatusMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+        </StackPanel>
+      </StackPanel>
+    </Border>
+  </StackPanel>
+</UserControl>

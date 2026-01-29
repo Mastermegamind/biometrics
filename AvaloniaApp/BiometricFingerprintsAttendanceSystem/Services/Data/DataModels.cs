@@ -12,6 +12,7 @@ public record StudentInfo
     public string? Faculty { get; init; }
     public byte[]? PassportPhoto { get; init; }
     public string? PassportUrl { get; init; }
+    public DateTime? RenewalDate { get; init; }
 }
 
 /// <summary>

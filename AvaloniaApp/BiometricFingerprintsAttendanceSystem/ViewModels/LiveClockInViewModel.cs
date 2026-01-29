@@ -2,12 +2,15 @@ using System.Windows.Input;
 using Avalonia.Media.Imaging;
 using BiometricFingerprintsAttendanceSystem.Services;
 using BiometricFingerprintsAttendanceSystem.Services.Data;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace BiometricFingerprintsAttendanceSystem.ViewModels;
 
 public class LiveClockInViewModel : ViewModelBase
 {
     private readonly IServiceRegistry _services;
+    private readonly ILogger<LiveClockInViewModel> _logger;
 
     private string _studentName = string.Empty;
     private string _studentRegNo = string.Empty;
@@ -23,6 +26,8 @@ public class LiveClockInViewModel : ViewModelBase
     public LiveClockInViewModel(IServiceRegistry services)
     {
         _services = services;
+        _logger = services.Provider.GetService(typeof(ILogger<LiveClockInViewModel>)) as ILogger<LiveClockInViewModel>
+            ?? NullLogger<LiveClockInViewModel>.Instance;
 
         ClockInCommand = new AsyncRelayCommand(ProcessClockInAsync, () => !IsProcessing);
         ResetCommand = new RelayCommand(Reset);
@@ -120,14 +125,17 @@ public class LiveClockInViewModel : ViewModelBase
             if (!initResult)
             {
                 StatusMessage = "Fingerprint scanner not available";
+                _logger.LogWarning("Live clock-in scanner init failed");
                 return;
             }
 
             StatusMessage = "Ready. Place your finger on the scanner...";
+            _logger.LogInformation("Live clock-in scanner ready");
         }
         catch (Exception ex)
         {
             StatusMessage = $"Scanner error: {ex.Message}";
+            _logger.LogError(ex, "Live clock-in scanner error");
         }
     }
 
@@ -136,6 +144,7 @@ public class LiveClockInViewModel : ViewModelBase
         IsProcessing = true;
         ShowResult = false;
         StatusMessage = "Scanning fingerprint...";
+        _logger.LogInformation("Live clock-in started");
 
         try
         {
@@ -144,6 +153,7 @@ public class LiveClockInViewModel : ViewModelBase
             if (!captureResult.Success || captureResult.SampleData == null)
             {
                 StatusMessage = captureResult.Message ?? "Capture failed. Please try again.";
+                _logger.LogWarning("Live clock-in capture failed: {Message}", captureResult.Message ?? "Capture failed");
                 return;
             }
 
@@ -161,6 +171,7 @@ public class LiveClockInViewModel : ViewModelBase
             if (templateData == null || templateData.Length == 0)
             {
                 StatusMessage = "Failed to process fingerprint. Please try again.";
+                _logger.LogWarning("Live clock-in template creation failed");
                 return;
             }
 
@@ -177,6 +188,7 @@ public class LiveClockInViewModel : ViewModelBase
 
             if (result.Success && result.Student != null)
             {
+                _logger.LogInformation("Live clock-in success for RegNo {RegNo}", result.Student.RegNo);
                 IsSuccess = true;
                 StudentName = result.Student.Name;
                 StudentRegNo = result.Student.RegNo;
@@ -197,6 +209,10 @@ public class LiveClockInViewModel : ViewModelBase
                         using var stream = new MemoryStream(photoResult.Data);
                         StudentPhoto = new Bitmap(stream);
                     }
+                    else
+                    {
+                        _logger.LogWarning("Live clock-in photo fetch failed for RegNo {RegNo}: {Message}", result.Student.RegNo, photoResult.Message ?? "No photo data");
+                    }
                 }
 
                 StatusMessage = "Clock-in successful!";
@@ -213,17 +229,20 @@ public class LiveClockInViewModel : ViewModelBase
                 StudentName = result.Student?.Name ?? "";
                 StudentRegNo = result.Student?.RegNo ?? "";
                 StatusMessage = "Already clocked in today!";
+                _logger.LogWarning("Live clock-in already clocked in for RegNo {RegNo}", StudentRegNo);
             }
             else
             {
                 IsSuccess = false;
                 StatusMessage = result.Message ?? "Fingerprint not recognized. Please try again.";
+                _logger.LogWarning("Live clock-in failed: {Message}", result.Message ?? "Unknown error");
             }
         }
         catch (Exception ex)
         {
             IsSuccess = false;
             StatusMessage = $"Error: {ex.Message}";
+            _logger.LogError(ex, "Live clock-in error");
         }
         finally
         {

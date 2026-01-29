@@ -3,6 +3,7 @@ using BiometricFingerprintsAttendanceSystem.Services.Camera;
 using BiometricFingerprintsAttendanceSystem.Services.Data;
 using BiometricFingerprintsAttendanceSystem.Services.Db;
 using BiometricFingerprintsAttendanceSystem.Services.Fingerprint;
+using BiometricFingerprintsAttendanceSystem.Services.Security;
 
 namespace BiometricFingerprintsAttendanceSystem.Services;
 
@@ -20,6 +21,9 @@ public interface IServiceRegistry
     BiometricsApiClient Api { get; }
     DemoBiometricsApiClient? DemoApi { get; }
     IDataService Data { get; }
+    AuditLogService Audit { get; }
+    LoginAttemptRepository LoginAttempts { get; }
+    PasswordResetRepository PasswordResets { get; }
     bool IsDemoMode { get; }
     IServiceProvider Provider { get; }
 }

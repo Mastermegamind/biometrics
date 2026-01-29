@@ -22,13 +22,16 @@ public sealed record AppConfig(
     string DemoStudentClass,
     SyncMode SyncMode,
     int ApiTimeoutSeconds,
+    int MaxFailedLoginAttempts,
+    int LockoutMinutes,
     int MinimumFingersRequired)
 {
     private const string DefaultConnectionString = "SERVER=localhost; DATABASE=mda_biometrics; userid=root; PASSWORD=root; PORT=3306;";
-    private const string DefaultApiBaseUrl = "https://api.mydreamsacademy.com.ng/biometrics";
+    private const string DefaultApiBaseUrl = "https://portal.mydreamsacademy.com.ng";
 
     public static AppConfig Load()
     {
+        LoadDotEnv();
         var path = Path.Combine(AppContext.BaseDirectory, "appsettings.json");
         if (!File.Exists(path))
         {
@@ -53,9 +56,9 @@ public sealed record AppConfig(
         var enableFingerprintSdks = false;
         var apiBaseUrl = DefaultApiBaseUrl;
         var apiKey = string.Empty;
-        var apiKeyHeader = "x-api-key";
-        var studentLookupPath = "students/{regNo}";
-        var enrollmentStatusPath = "enrollments/{regNo}";
+        var apiKeyHeader = "X-API-Key";
+        var studentLookupPath = "students?regNo={regNo}";
+        var enrollmentStatusPath = "enrollment/status?regNo={regNo}";
         var enrollmentSubmitPath = "enrollments";
         var identifyPath = "identify";
         var enableDemoMode = false;
@@ -66,6 +69,8 @@ public sealed record AppConfig(
         var demoStudentClass = "Demo Class";
         var syncMode = SyncMode.OnlineFirst;
         var apiTimeoutSeconds = 30;
+        var maxFailedLoginAttempts = 5;
+        var lockoutMinutes = 15;
         var minimumFingersRequired = 2;
 
         ApplyEnvOverrides(
@@ -74,7 +79,7 @@ public sealed record AppConfig(
             ref studentLookupPath, ref enrollmentStatusPath, ref enrollmentSubmitPath, ref identifyPath,
             ref enableDemoMode, ref demoAdminEmail, ref demoAdminPassword,
             ref demoStudentRegNo, ref demoStudentName, ref demoStudentClass,
-            ref syncMode, ref apiTimeoutSeconds, ref minimumFingersRequired);
+            ref syncMode, ref apiTimeoutSeconds, ref maxFailedLoginAttempts, ref lockoutMinutes, ref minimumFingersRequired);
 
         return new AppConfig(
             connectionString, fingerprintDevice, enableFingerprintSdks,
@@ -82,7 +87,7 @@ public sealed record AppConfig(
             studentLookupPath, enrollmentStatusPath, enrollmentSubmitPath, identifyPath,
             enableDemoMode, demoAdminEmail, demoAdminPassword,
             demoStudentRegNo, demoStudentName, demoStudentClass,
-            syncMode, apiTimeoutSeconds, minimumFingersRequired);
+            syncMode, apiTimeoutSeconds, maxFailedLoginAttempts, lockoutMinutes, minimumFingersRequired);
     }
 
     private static AppConfig ParseConfig(JsonDocument doc)
@@ -92,9 +97,9 @@ public sealed record AppConfig(
         var enableFingerprintSdks = false;
         var apiBaseUrl = DefaultApiBaseUrl;
         var apiKey = string.Empty;
-        var apiKeyHeader = "x-api-key";
-        var studentLookupPath = "students/{regNo}";
-        var enrollmentStatusPath = "enrollments/{regNo}";
+        var apiKeyHeader = "X-API-Key";
+        var studentLookupPath = "students?regNo={regNo}";
+        var enrollmentStatusPath = "enrollment/status?regNo={regNo}";
         var enrollmentSubmitPath = "enrollments";
         var identifyPath = "identify";
         var enableDemoMode = false;
@@ -105,6 +110,8 @@ public sealed record AppConfig(
         var demoStudentClass = "Demo Class";
         var syncMode = SyncMode.OnlineFirst;
         var apiTimeoutSeconds = 30;
+        var maxFailedLoginAttempts = 5;
+        var lockoutMinutes = 15;
         var minimumFingersRequired = 2;
 
         // Parse ConnectionStrings
@@ -192,6 +199,19 @@ public sealed record AppConfig(
             }
         }
 
+        if (doc.RootElement.TryGetProperty("Auth", out var auth))
+        {
+            if (auth.TryGetProperty("MaxFailedLoginAttempts", out var maxFailed) && maxFailed.ValueKind == JsonValueKind.Number)
+            {
+                maxFailedLoginAttempts = maxFailed.GetInt32();
+            }
+
+            if (auth.TryGetProperty("LockoutMinutes", out var lockout) && lockout.ValueKind == JsonValueKind.Number)
+            {
+                lockoutMinutes = lockout.GetInt32();
+            }
+        }
+
         // Parse Demo
         if (doc.RootElement.TryGetProperty("Demo", out var demo))
         {
@@ -232,7 +252,7 @@ public sealed record AppConfig(
             ref studentLookupPath, ref enrollmentStatusPath, ref enrollmentSubmitPath, ref identifyPath,
             ref enableDemoMode, ref demoAdminEmail, ref demoAdminPassword,
             ref demoStudentRegNo, ref demoStudentName, ref demoStudentClass,
-            ref syncMode, ref apiTimeoutSeconds, ref minimumFingersRequired);
+            ref syncMode, ref apiTimeoutSeconds, ref maxFailedLoginAttempts, ref lockoutMinutes, ref minimumFingersRequired);
 
         return new AppConfig(
             connectionString, fingerprintDevice, enableFingerprintSdks,
@@ -240,7 +260,7 @@ public sealed record AppConfig(
             studentLookupPath, enrollmentStatusPath, enrollmentSubmitPath, identifyPath,
             enableDemoMode, demoAdminEmail, demoAdminPassword,
             demoStudentRegNo, demoStudentName, demoStudentClass,
-            syncMode, apiTimeoutSeconds, minimumFingersRequired);
+            syncMode, apiTimeoutSeconds, maxFailedLoginAttempts, lockoutMinutes, minimumFingersRequired);
     }
 
     private static void ApplyEnvOverrides(
@@ -262,6 +282,8 @@ public sealed record AppConfig(
         ref string demoStudentClass,
         ref SyncMode syncMode,
         ref int apiTimeoutSeconds,
+        ref int maxFailedLoginAttempts,
+        ref int lockoutMinutes,
         ref int minimumFingersRequired)
     {
         ApplyEnvVariable("BIOCLOCK_CONNECTION_STRING", ref connectionString);
@@ -269,6 +291,7 @@ public sealed record AppConfig(
         ApplyEnvVariable("BIOCLOCK_ENABLE_FINGERPRINT_SDKS", ref enableFingerprintSdks);
         ApplyEnvVariable("BIOCLOCK_API_BASE_URL", ref apiBaseUrl);
         ApplyEnvVariable("BIOCLOCK_API_KEY", ref apiKey);
+        ApplyEnvVariable("API_KEY", ref apiKey);
         ApplyEnvVariable("BIOCLOCK_API_KEY_HEADER", ref apiKeyHeader);
         ApplyEnvVariable("BIOCLOCK_STUDENT_LOOKUP_PATH", ref studentLookupPath);
         ApplyEnvVariable("BIOCLOCK_ENROLLMENT_STATUS_PATH", ref enrollmentStatusPath);
@@ -282,6 +305,8 @@ public sealed record AppConfig(
         ApplyEnvVariable("BIOCLOCK_DEMO_STUDENT_CLASS", ref demoStudentClass);
         ApplyEnvVariable("BIOCLOCK_SYNC_MODE", ref syncMode);
         ApplyEnvVariable("BIOCLOCK_API_TIMEOUT", ref apiTimeoutSeconds);
+        ApplyEnvVariable("BIOCLOCK_AUTH_MAX_FAILED", ref maxFailedLoginAttempts);
+        ApplyEnvVariable("BIOCLOCK_AUTH_LOCKOUT_MINUTES", ref lockoutMinutes);
         ApplyEnvVariable("BIOCLOCK_MIN_FINGERS", ref minimumFingersRequired);
     }
 
@@ -318,6 +343,49 @@ public sealed record AppConfig(
         if (Enum.TryParse<SyncMode>(envValue, ignoreCase: true, out var parsedValue))
         {
             value = parsedValue;
+        }
+    }
+
+    private static void LoadDotEnv()
+    {
+        var cwdPath = Path.Combine(Directory.GetCurrentDirectory(), ".env");
+        var basePath = Path.Combine(AppContext.BaseDirectory, ".env");
+        var path = File.Exists(cwdPath) ? cwdPath : basePath;
+        if (!File.Exists(path))
+        {
+            return;
+        }
+
+        foreach (var rawLine in File.ReadAllLines(path))
+        {
+            var line = rawLine.Trim();
+            if (line.Length == 0 || line.StartsWith("#", StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            var idx = line.IndexOf('=');
+            if (idx <= 0)
+            {
+                continue;
+            }
+
+            var key = line[..idx].Trim();
+            var value = line[(idx + 1)..].Trim();
+            if (value.Length >= 2 && value.StartsWith('"') && value.EndsWith('"'))
+            {
+                value = value[1..^1];
+            }
+
+            if (string.IsNullOrWhiteSpace(key))
+            {
+                continue;
+            }
+
+            if (string.IsNullOrEmpty(Environment.GetEnvironmentVariable(key)))
+            {
+                Environment.SetEnvironmentVariable(key, value);
+            }
         }
     }
 }

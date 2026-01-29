@@ -34,7 +34,8 @@ public class OnlineDataProvider
         // Add API key if configured
         if (!string.IsNullOrEmpty(config.ApiKey))
         {
-            _http.DefaultRequestHeaders.Add("X-API-Key", config.ApiKey);
+            var headerName = string.IsNullOrWhiteSpace(config.ApiKeyHeader) ? "X-API-Key" : config.ApiKeyHeader;
+            _http.DefaultRequestHeaders.Add(headerName, config.ApiKey);
         }
     }
 
@@ -45,7 +46,10 @@ public class OnlineDataProvider
     {
         try
         {
-            var response = await _http.GetAsync("/api/health");
+            var path = "/api/health";
+            LogRequest("GET", path, null);
+            var response = await _http.GetAsync(path);
+            LogResponse(path, response, null);
             return response.IsSuccessStatusCode;
         }
         catch (Exception ex)
@@ -62,7 +66,11 @@ public class OnlineDataProvider
     {
         try
         {
-            var response = await _http.GetAsync($"/api/students/{Uri.EscapeDataString(regNo)}");
+            var path = BuildApiRegNoPath(_config.StudentLookupPath, regNo);
+            LogRequest("GET", path, new { regNo });
+            var response = await _http.GetAsync(path);
+            var body = await SafeReadResponseBodyAsync(response);
+            LogResponse(path, response, body);
 
             if (!response.IsSuccessStatusCode)
             {
@@ -72,8 +80,8 @@ public class OnlineDataProvider
                 return DataResult<StudentInfo>.Fail($"API error: {response.StatusCode}");
             }
 
-            var json = await response.Content.ReadAsStringAsync();
-            var apiResponse = JsonSerializer.Deserialize<ApiStudentResponse>(json, _jsonOptions);
+            var envelope = JsonSerializer.Deserialize<ApiStudentEnvelope>(body, _jsonOptions);
+            var apiResponse = envelope?.Student ?? JsonSerializer.Deserialize<ApiStudentResponse>(body, _jsonOptions);
 
             if (apiResponse == null)
                 return DataResult<StudentInfo>.Fail("Invalid API response");
@@ -82,10 +90,11 @@ public class OnlineDataProvider
             {
                 RegNo = apiResponse.RegNo ?? apiResponse.MatricNo ?? regNo,
                 Name = apiResponse.Name ?? apiResponse.FullName ?? "Unknown",
-                ClassName = apiResponse.ClassName ?? apiResponse.Class ?? "",
+                ClassName = apiResponse.ClassName ?? apiResponse.Class ?? apiResponse.Classes?.FirstOrDefault() ?? "",
                 Department = apiResponse.Department,
                 Faculty = apiResponse.Faculty,
-                PassportUrl = apiResponse.PassportUrl ?? apiResponse.Passport
+                PassportUrl = apiResponse.PassportUrl ?? apiResponse.Passport,
+                RenewalDate = apiResponse.RenewalDate
             };
 
             return DataResult<StudentInfo>.Ok(student);
@@ -113,12 +122,16 @@ public class OnlineDataProvider
     {
         try
         {
-            var response = await _http.GetAsync($"/api/students/{Uri.EscapeDataString(regNo)}/photo");
+            var path = BuildApiRegNoPath("students/photo", regNo);
+            LogRequest("GET", path, new { regNo });
+            var response = await _http.GetAsync(path);
+            LogResponse(path, response, null);
 
             if (!response.IsSuccessStatusCode)
                 return DataResult<byte[]>.Fail("Photo not found");
 
             var photoBytes = await response.Content.ReadAsByteArrayAsync();
+            _logger.LogInformation("API response body bytes for {Path}: {ByteCount}", path, photoBytes.Length);
             return DataResult<byte[]>.Ok(photoBytes);
         }
         catch (Exception ex)
@@ -135,15 +148,18 @@ public class OnlineDataProvider
     {
         try
         {
-            var response = await _http.GetAsync($"/api/enrollment/status/{Uri.EscapeDataString(regNo)}");
+            var path = BuildApiRegNoPath(_config.EnrollmentStatusPath, regNo);
+            LogRequest("GET", path, new { regNo });
+            var response = await _http.GetAsync(path);
+            var body = await SafeReadResponseBodyAsync(response);
+            LogResponse(path, response, body);
 
             if (!response.IsSuccessStatusCode)
             {
                 return DataResult<EnrollmentStatus>.Ok(new EnrollmentStatus { IsEnrolled = false });
             }
 
-            var json = await response.Content.ReadAsStringAsync();
-            var apiResponse = JsonSerializer.Deserialize<ApiEnrollmentStatusResponse>(json, _jsonOptions);
+            var apiResponse = JsonSerializer.Deserialize<ApiEnrollmentStatusResponse>(body, _jsonOptions);
 
             var status = new EnrollmentStatus
             {
@@ -182,12 +198,22 @@ public class OnlineDataProvider
                 EnrolledAt = request.EnrolledAt
             };
 
-            var response = await _http.PostAsJsonAsync("/api/enrollment/submit", payload, _jsonOptions);
+            var path = "/api/enrollment/submit";
+            LogRequest("POST", path, new
+            {
+                payload.RegNo,
+                payload.Name,
+                payload.ClassName,
+                Templates = payload.Templates.Select(t => new { t.Finger, t.FingerIndex, TemplateBytes = t.TemplateBase64.Length }).ToList(),
+                payload.EnrolledAt
+            });
+            var response = await _http.PostAsJsonAsync(path, payload, _jsonOptions);
+            var body = await SafeReadResponseBodyAsync(response);
+            LogResponse(path, response, body);
 
             if (!response.IsSuccessStatusCode)
             {
-                var error = await response.Content.ReadAsStringAsync();
-                _logger.LogWarning("Enrollment submission failed: {Error}", error);
+                _logger.LogWarning("Enrollment submission failed: {Error}", body);
                 return DataResult.Fail($"Enrollment failed: {response.StatusCode}");
             }
 
@@ -214,9 +240,17 @@ public class OnlineDataProvider
                 DeviceId = request.DeviceId
             };
 
-            var response = await _http.PostAsJsonAsync("/api/attendance/clockin", payload, _jsonOptions);
-            var json = await response.Content.ReadAsStringAsync();
-            var apiResponse = JsonSerializer.Deserialize<ApiClockInResponse>(json, _jsonOptions);
+            var path = "/api/attendance/clockin";
+            LogRequest("POST", path, new
+            {
+                TemplateBytes = payload.TemplateBase64.Length,
+                payload.Timestamp,
+                payload.DeviceId
+            });
+            var response = await _http.PostAsJsonAsync(path, payload, _jsonOptions);
+            var body = await SafeReadResponseBodyAsync(response);
+            LogResponse(path, response, body);
+            var apiResponse = JsonSerializer.Deserialize<ApiClockInResponse>(body, _jsonOptions);
 
             if (!response.IsSuccessStatusCode || apiResponse == null)
             {
@@ -267,9 +301,17 @@ public class OnlineDataProvider
                 DeviceId = request.DeviceId
             };
 
-            var response = await _http.PostAsJsonAsync("/api/attendance/clockout", payload, _jsonOptions);
-            var json = await response.Content.ReadAsStringAsync();
-            var apiResponse = JsonSerializer.Deserialize<ApiClockOutResponse>(json, _jsonOptions);
+            var path = "/api/attendance/clockout";
+            LogRequest("POST", path, new
+            {
+                TemplateBytes = payload.TemplateBase64.Length,
+                payload.Timestamp,
+                payload.DeviceId
+            });
+            var response = await _http.PostAsJsonAsync(path, payload, _jsonOptions);
+            var body = await SafeReadResponseBodyAsync(response);
+            LogResponse(path, response, body);
+            var apiResponse = JsonSerializer.Deserialize<ApiClockOutResponse>(body, _jsonOptions);
 
             if (!response.IsSuccessStatusCode || apiResponse == null)
             {
@@ -318,13 +360,15 @@ public class OnlineDataProvider
             if (!string.IsNullOrEmpty(regNo))
                 url += $"&regNo={Uri.EscapeDataString(regNo)}";
 
+            LogRequest("GET", url, new { from, to, regNo });
             var response = await _http.GetAsync(url);
+            var body = await SafeReadResponseBodyAsync(response);
+            LogResponse(url, response, body);
 
             if (!response.IsSuccessStatusCode)
                 return DataResult<List<AttendanceRecord>>.Fail("Failed to get attendance");
 
-            var json = await response.Content.ReadAsStringAsync();
-            var apiRecords = JsonSerializer.Deserialize<List<ApiAttendanceRecord>>(json, _jsonOptions) ?? [];
+            var apiRecords = JsonSerializer.Deserialize<List<ApiAttendanceRecord>>(body, _jsonOptions) ?? [];
 
             var records = apiRecords.Select(r => new AttendanceRecord
             {
@@ -349,6 +393,12 @@ public class OnlineDataProvider
 
     // ==================== API DTOs ====================
 
+    private record ApiStudentEnvelope
+    {
+        public bool Success { get; init; }
+        public ApiStudentResponse? Student { get; init; }
+    }
+
     private record ApiStudentResponse
     {
         public string? RegNo { get; init; }
@@ -357,10 +407,12 @@ public class OnlineDataProvider
         public string? FullName { get; init; }
         public string? ClassName { get; init; }
         public string? Class { get; init; }
+        public List<string>? Classes { get; init; }
         public string? Department { get; init; }
         public string? Faculty { get; init; }
         public string? PassportUrl { get; init; }
         public string? Passport { get; init; }
+        public DateTime? RenewalDate { get; init; }
     }
 
     private record ApiEnrollmentStatusResponse
@@ -429,5 +481,88 @@ public class OnlineDataProvider
         public DateTime Date { get; init; }
         public DateTime? TimeIn { get; init; }
         public DateTime? TimeOut { get; init; }
+    }
+
+    private void LogRequest(string method, string path, object? payload)
+    {
+        var url = new Uri(_http.BaseAddress ?? new Uri("http://localhost"), path);
+        if (payload == null)
+        {
+            _logger.LogInformation("API request {Method} {Url}", method, url);
+            return;
+        }
+        _logger.LogInformation("API request {Method} {Url} payload: {Payload}", method, url, SafeSerialize(payload));
+    }
+
+    private void LogResponse(string path, HttpResponseMessage response, string? body)
+    {
+        var url = new Uri(_http.BaseAddress ?? new Uri("http://localhost"), path);
+        if (body == null)
+        {
+            _logger.LogInformation("API response {Url} {StatusCode}", url, (int)response.StatusCode);
+            return;
+        }
+        _logger.LogInformation("API response {Url} {StatusCode} body: {Body}", url, (int)response.StatusCode, Truncate(body, 2000));
+    }
+
+    private static string SafeSerialize(object payload)
+    {
+        return JsonSerializer.Serialize(payload, new JsonSerializerOptions
+        {
+            PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+        });
+    }
+
+    private static async Task<string> SafeReadResponseBodyAsync(HttpResponseMessage response)
+    {
+        try
+        {
+            return await response.Content.ReadAsStringAsync();
+        }
+        catch (Exception ex)
+        {
+            return $"<failed to read response body: {ex.Message}>";
+        }
+    }
+
+    private static string Truncate(string value, int max)
+    {
+        if (value.Length <= max) return value;
+        return value[..max] + "...(truncated)";
+    }
+
+    private static string BuildApiRegNoPath(string path, string regNo)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            path = "students";
+        }
+
+        var normalized = NormalizeApiPath(path);
+        var encodedRegNo = Uri.EscapeDataString(regNo);
+
+        if (normalized.Contains("{regNo}", StringComparison.OrdinalIgnoreCase))
+        {
+            return normalized.Replace("{regNo}", encodedRegNo, StringComparison.OrdinalIgnoreCase);
+        }
+
+        var separator = normalized.Contains('?') ? "&" : "?";
+        return $"{normalized}{separator}regNo={encodedRegNo}";
+    }
+
+    private static string NormalizeApiPath(string path)
+    {
+        var trimmed = path.Trim();
+        if (trimmed.StartsWith("/api/", StringComparison.OrdinalIgnoreCase))
+        {
+            return trimmed;
+        }
+
+        if (trimmed.StartsWith("/", StringComparison.Ordinal))
+        {
+            return $"/api{trimmed}";
+        }
+
+        return $"/api/{trimmed}";
     }
 }

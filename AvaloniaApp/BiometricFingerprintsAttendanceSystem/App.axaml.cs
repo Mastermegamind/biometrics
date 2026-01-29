@@ -4,9 +4,12 @@ using Avalonia.Markup.Xaml;
 using BiometricFingerprintsAttendanceSystem.Services;
 using BiometricFingerprintsAttendanceSystem.Services.Api;
 using BiometricFingerprintsAttendanceSystem.Services.Camera;
+using BiometricFingerprintsAttendanceSystem.Services.Config;
 using BiometricFingerprintsAttendanceSystem.Services.Data;
 using BiometricFingerprintsAttendanceSystem.Services.Db;
 using BiometricFingerprintsAttendanceSystem.Services.Fingerprint;
+using BiometricFingerprintsAttendanceSystem.Services.Logging;
+using BiometricFingerprintsAttendanceSystem.Services.Security;
 using BiometricFingerprintsAttendanceSystem.ViewModels;
 using BiometricFingerprintsAttendanceSystem.Views;
 using Microsoft.Extensions.DependencyInjection;
@@ -35,6 +38,8 @@ public partial class App : Application
 
             var serviceProvider = ConfigureServices();
             var services = new ServiceRegistry(serviceProvider);
+            serviceProvider.GetRequiredService<SyncManager>().Start();
+            serviceProvider.GetRequiredService<EnrollmentCacheRefresher>().Start();
 
             var mainWindow = new MainWindow
             {
@@ -65,6 +70,7 @@ public partial class App : Application
             config.EnrollmentStatusPath,
             config.EnrollmentSubmitPath,
             config.IdentifyPath));
+        services.AddMemoryCache();
 
         // Database
         services.AddSingleton<DbConnectionFactory>();
@@ -92,6 +98,11 @@ public partial class App : Application
         services.AddSingleton<OnlineDataProvider>();
         services.AddSingleton<OfflineDataProvider>();
         services.AddSingleton<IDataService, DataService>();
+        services.AddSingleton<AuditLogService>();
+        services.AddSingleton<LoginAttemptRepository>();
+        services.AddSingleton<PasswordResetRepository>();
+        services.AddSingleton<EnrollmentCacheRefresher>();
+        services.AddSingleton<AppConfigService>();
 
         // ViewModels
         services.AddTransient<LoginViewModel>();
@@ -102,6 +113,9 @@ public partial class App : Application
         services.AddTransient<UserHomeViewModel>();
         services.AddTransient<AdminHomeViewModel>();
         services.AddTransient<AdminRegistrationViewModel>();
+        services.AddTransient<AdminPasswordResetViewModel>();
+        services.AddTransient<DiagnosticsViewModel>();
+        services.AddTransient<AdminSettingsViewModel>();
         services.AddTransient<EnrollmentViewModel>();
         services.AddTransient<DemoViewModel>();
         services.AddTransient<AttendanceReportViewModel>();
@@ -118,6 +132,7 @@ public partial class App : Application
         services.AddLogging(logging =>
         {
             logging.AddConsole();
+            logging.AddProvider(new JsonFileLoggerProvider(Path.Combine(AppContext.BaseDirectory, "logs", "app.log")));
             logging.SetMinimumLevel(LogLevel.Information);
         });
 

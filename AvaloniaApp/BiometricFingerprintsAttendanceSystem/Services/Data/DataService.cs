@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
 
 namespace BiometricFingerprintsAttendanceSystem.Services.Data;
@@ -11,6 +12,7 @@ public class DataService : IDataService
     private readonly OnlineDataProvider _online;
     private readonly OfflineDataProvider _offline;
     private readonly ILogger<DataService> _logger;
+    private readonly IMemoryCache _cache;
     private readonly JsonSerializerOptions _jsonOptions;
 
     private bool _isOnline;
@@ -20,11 +22,13 @@ public class DataService : IDataService
         OnlineDataProvider online,
         OfflineDataProvider offline,
         AppConfig config,
-        ILogger<DataService> logger)
+        ILogger<DataService> logger,
+        IMemoryCache cache)
     {
         _online = online;
         _offline = offline;
         _logger = logger;
+        _cache = cache;
         Mode = config.SyncMode;
 
         _jsonOptions = new JsonSerializerOptions
@@ -48,7 +52,12 @@ public class DataService : IDataService
 
     public async Task<DataResult<StudentInfo>> GetStudentAsync(string regNo)
     {
-        return Mode switch
+        var cacheKey = $"student:{regNo}";
+        if (_cache.TryGetValue(cacheKey, out StudentInfo? cachedStudent) && cachedStudent is not null)
+        {
+            return DataResult<StudentInfo>.Ok(cachedStudent);
+        }
+        var result = Mode switch
         {
             SyncMode.OnlineOnly => await _online.GetStudentAsync(regNo),
             SyncMode.OfflineOnly => await _offline.GetStudentAsync(regNo),
@@ -56,11 +65,21 @@ public class DataService : IDataService
             SyncMode.OfflineFirst => await OfflineFirstGetStudentAsync(regNo),
             _ => DataResult<StudentInfo>.Fail("Invalid sync mode")
         };
+        if (result.Success && result.Data is not null)
+        {
+            _cache.Set(cacheKey, result.Data, TimeSpan.FromMinutes(5));
+        }
+        return result;
     }
 
     public async Task<DataResult<byte[]>> GetStudentPhotoAsync(string regNo)
     {
-        return Mode switch
+        var cacheKey = $"student_photo:{regNo}";
+        if (_cache.TryGetValue(cacheKey, out byte[]? cachedPhoto) && cachedPhoto is not null)
+        {
+            return DataResult<byte[]>.Ok(cachedPhoto);
+        }
+        var result = Mode switch
         {
             SyncMode.OnlineOnly => await _online.GetStudentPhotoAsync(regNo),
             SyncMode.OfflineOnly => await _offline.GetStudentPhotoAsync(regNo),
@@ -68,13 +87,23 @@ public class DataService : IDataService
             SyncMode.OfflineFirst => await OfflineFirstGetPhotoAsync(regNo),
             _ => DataResult<byte[]>.Fail("Invalid sync mode")
         };
+        if (result.Success && result.Data is not null)
+        {
+            _cache.Set(cacheKey, result.Data, TimeSpan.FromMinutes(10));
+        }
+        return result;
     }
 
     // ==================== Enrollment Operations ====================
 
     public async Task<DataResult<EnrollmentStatus>> GetEnrollmentStatusAsync(string regNo)
     {
-        return Mode switch
+        var cacheKey = $"enrollment_status:{regNo}";
+        if (_cache.TryGetValue(cacheKey, out EnrollmentStatus? cachedStatus) && cachedStatus is not null)
+        {
+            return DataResult<EnrollmentStatus>.Ok(cachedStatus);
+        }
+        var result = Mode switch
         {
             SyncMode.OnlineOnly => await _online.GetEnrollmentStatusAsync(regNo),
             SyncMode.OfflineOnly => await _offline.GetEnrollmentStatusAsync(regNo),
@@ -82,6 +111,11 @@ public class DataService : IDataService
             SyncMode.OfflineFirst => await OfflineFirstGetEnrollmentStatusAsync(regNo),
             _ => DataResult<EnrollmentStatus>.Fail("Invalid sync mode")
         };
+        if (result.Success && result.Data is not null)
+        {
+            _cache.Set(cacheKey, result.Data, TimeSpan.FromMinutes(2));
+        }
+        return result;
     }
 
     public async Task<DataResult> SubmitEnrollmentAsync(EnrollmentRequest request)

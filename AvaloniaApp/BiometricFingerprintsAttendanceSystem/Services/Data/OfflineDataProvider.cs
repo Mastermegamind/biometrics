@@ -1,5 +1,6 @@
 using BiometricFingerprintsAttendanceSystem.Services.Db;
 using BiometricFingerprintsAttendanceSystem.Services.Fingerprint;
+using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
 using MySqlConnector;
 
@@ -13,15 +14,19 @@ public class OfflineDataProvider
     private readonly DbConnectionFactory _db;
     private readonly IFingerprintService _fingerprint;
     private readonly ILogger<OfflineDataProvider> _logger;
+    private readonly IMemoryCache _cache;
+    private const string EnrollmentCacheKey = "offline_enrollments_cache";
 
     public OfflineDataProvider(
         DbConnectionFactory db,
         IFingerprintService fingerprint,
-        ILogger<OfflineDataProvider> logger)
+        ILogger<OfflineDataProvider> logger,
+        IMemoryCache cache)
     {
         _db = db;
         _fingerprint = fingerprint;
         _logger = logger;
+        _cache = cache;
     }
 
     /// <summary>
@@ -205,6 +210,7 @@ public class OfflineDataProvider
                 await insertCmd.ExecuteNonQueryAsync();
             }
 
+            _cache.Remove(EnrollmentCacheKey);
             _logger.LogInformation("Enrollment saved locally for {RegNo}", request.RegNo);
             return DataResult.Ok("Enrollment saved locally");
         }
@@ -222,6 +228,12 @@ public class OfflineDataProvider
     {
         try
         {
+            if (_cache.TryGetValue(EnrollmentCacheKey, out List<(string RegNo, List<FingerprintTemplate> Templates)>? cached) &&
+                cached is not null)
+            {
+                return DataResult<List<(string RegNo, List<FingerprintTemplate> Templates)>>.Ok(cached);
+            }
+
             await using var conn = await _db.CreateConnectionAsync();
             await using var cmd = conn.CreateCommand();
             cmd.CommandText = @"
@@ -263,6 +275,7 @@ public class OfflineDataProvider
                 }
             }
 
+            _cache.Set(EnrollmentCacheKey, results, TimeSpan.FromMinutes(2));
             return DataResult<List<(string RegNo, List<FingerprintTemplate> Templates)>>.Ok(results);
         }
         catch (Exception ex)

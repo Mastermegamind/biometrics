@@ -55,6 +55,12 @@
                     </Border>
 
                     <!-- Student Details -->
+                    <TextBlock Text="Reg No" FontWeight="SemiBold"/>
+                    <TextBlock Text="{Binding StudentRegNo}"
+                               FontSize="14"
+                               Margin="0,0,0,10"
+                               TextWrapping="Wrap"/>
+
                     <TextBlock Text="Name" FontWeight="SemiBold"/>
                     <TextBlock Text="{Binding StudentName}"
                                FontSize="14"
@@ -63,6 +69,27 @@
 
                     <TextBlock Text="Class" FontWeight="SemiBold"/>
                     <TextBlock Text="{Binding StudentClass}"
+                               FontSize="14"
+                               Margin="0,0,0,10"/>
+
+                    <TextBlock Text="Passport URL" FontWeight="SemiBold"/>
+                    <TextBlock Text="{Binding PassportUrl}"
+                               FontSize="12"
+                               Margin="0,0,0,10"
+                               TextWrapping="Wrap"/>
+
+                    <TextBlock Text="Renewal Date" FontWeight="SemiBold"/>
+                    <TextBlock Text="{Binding RenewalDate}"
+                               FontSize="14"
+                               Margin="0,0,0,10"/>
+
+                    <TextBlock Text="Enrollment Status" FontWeight="SemiBold"/>
+                    <TextBlock Text="{Binding EnrollmentStatus}"
+                               FontSize="14"
+                               Margin="0,0,0,10"/>
+
+                    <TextBlock Text="Finger Count" FontWeight="SemiBold"/>
+                    <TextBlock Text="{Binding EnrollmentFingerCount}"
                                FontSize="14"/>
                 </StackPanel>
             </Border>
@@ -98,8 +125,7 @@
                                         <DataTemplate>
                                             <RadioButton Content="{Binding DisplayName}"
                                                          GroupName="FingerSelection"
-                                                         IsChecked="{Binding $parent[UserControl].((vm:LiveEnrollmentViewModel)DataContext).SelectedFinger,
-                                                                     Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                                                         IsChecked="{Binding IsSelected, Mode=TwoWay}"
                                                          IsVisible="{Binding Name, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
                                                          Margin="0,2">
                                                 <RadioButton.IsVisible>

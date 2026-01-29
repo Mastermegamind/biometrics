@@ -1,4 +1,3 @@
-using BCrypt.Net;
 using MySqlConnector;
 
 namespace BiometricFingerprintsAttendanceSystem.Services.Db;
@@ -55,7 +54,7 @@ public sealed class UserRepository
                 return null;
             }
 
-            return BCrypt.Verify(password, storedPassword) ? userType : null;
+            return BCrypt.Net.BCrypt.Verify(password, storedPassword) ? userType : null;
         }
         catch
         {
@@ -71,4 +70,31 @@ public sealed class UserRepository
     }
 
     public bool IsDemoMode => _demoMode;
+
+    public async Task<bool> UpdateAdminPasswordAsync(string username, string newPassword, CancellationToken cancellationToken = default)
+    {
+        var hash = BCrypt.Net.BCrypt.HashPassword(newPassword);
+        await using var conn = _factory.Create();
+        await conn.OpenAsync(cancellationToken);
+
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText = "UPDATE admin_users SET password = @password WHERE username = @username";
+        cmd.Parameters.AddWithValue("@password", hash);
+        cmd.Parameters.AddWithValue("@username", username);
+
+        var affected = await cmd.ExecuteNonQueryAsync(cancellationToken);
+        return affected > 0;
+    }
+
+    public async Task<int> GetAdminCountAsync(CancellationToken cancellationToken = default)
+    {
+        await using var conn = _factory.Create();
+        await conn.OpenAsync(cancellationToken);
+
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText = "SELECT COUNT(*) FROM admin_users";
+
+        var result = await cmd.ExecuteScalarAsync(cancellationToken);
+        return result == null || result == DBNull.Value ? 0 : Convert.ToInt32(result);
+    }
 }

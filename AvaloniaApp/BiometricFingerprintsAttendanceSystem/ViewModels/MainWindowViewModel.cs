@@ -30,6 +30,9 @@ public sealed class MainWindowViewModel : ViewModelBase, INavigationService
             ["TimeOut"] = new TimeOutViewModel(services),
             ["Report"] = new AttendanceReportViewModel(services),
             ["AdminReg"] = new AdminRegistrationViewModel(services),
+            ["AdminReset"] = new AdminPasswordResetViewModel(services),
+            ["Diagnostics"] = new DiagnosticsViewModel(services),
+            ["Settings"] = new AdminSettingsViewModel(services),
             ["Demo"] = new DemoViewModel(services),
             ["LiveEnrollment"] = new LiveEnrollmentViewModel(services),
             ["LiveClockIn"] = new LiveClockInViewModel(services),
@@ -48,7 +51,10 @@ public sealed class MainWindowViewModel : ViewModelBase, INavigationService
             new("\u23F3", "Clock Out", () => NavigateToKey("TimeOut")),
             new("\u23F3", "Live Clock Out", () => NavigateToKey("LiveClockOut")),
             new("\U0001F4CB", "Attendance Report", () => NavigateToKey("Report")),
-            new("\U0001F6E1", "Admin Registration", () => NavigateToKey("AdminReg"))
+            new("\U0001F6E1", "Admin Registration", () => NavigateToKey("AdminReg")),
+            new("\U0001F511", "Admin Password Reset", () => NavigateToKey("AdminReset")),
+            new("\U0001F50D", "Diagnostics", () => NavigateToKey("Diagnostics")),
+            new("\u2699", "Settings", () => NavigateToKey("Settings"))
         };
 
         // Add Demo Testing item if demo mode is enabled

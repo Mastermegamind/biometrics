@@ -14,6 +14,8 @@ public class SyncManager : IDisposable
     private readonly CancellationTokenSource _cts = new();
     private Task? _syncTask;
     private bool _disposed;
+    private const int DefaultRetryCount = 3;
+    private static readonly TimeSpan DefaultRetryBaseDelay = TimeSpan.FromSeconds(2);
 
     public event EventHandler<SyncEventArgs>? SyncCompleted;
     public event EventHandler<SyncEventArgs>? SyncStarted;
@@ -135,23 +137,42 @@ public class SyncManager : IDisposable
 
         SyncStarted?.Invoke(this, new SyncEventArgs(_dataService.PendingSyncCount));
 
-        try
-        {
-            var result = await _dataService.SyncPendingAsync();
+        var attempts = 0;
+        Exception? lastError = null;
 
-            SyncCompleted?.Invoke(this, new SyncEventArgs(
-                _dataService.PendingSyncCount,
-                result.Success,
-                result.Message));
-
-            return result;
-        }
-        catch (Exception ex)
+        while (attempts < DefaultRetryCount)
         {
-            _logger.LogError(ex, "Sync failed");
-            SyncError?.Invoke(this, new SyncErrorEventArgs(ex));
-            return DataResult.Fail(ex.Message);
+            attempts++;
+            try
+            {
+                var result = await _dataService.SyncPendingAsync();
+                SyncCompleted?.Invoke(this, new SyncEventArgs(
+                    _dataService.PendingSyncCount,
+                    result.Success,
+                    result.Message));
+
+                return result;
+            }
+            catch (Exception ex)
+            {
+                lastError = ex;
+                _logger.LogWarning(ex, "Sync attempt {Attempt} failed", attempts);
+                if (attempts < DefaultRetryCount)
+                {
+                    var delay = TimeSpan.FromMilliseconds(DefaultRetryBaseDelay.TotalMilliseconds * Math.Pow(2, attempts - 1));
+                    await Task.Delay(delay);
+                }
+            }
         }
+
+        if (lastError != null)
+        {
+            _logger.LogError(lastError, "Sync failed after retries");
+            SyncError?.Invoke(this, new SyncErrorEventArgs(lastError));
+            return DataResult.Fail(lastError.Message);
+        }
+
+        return DataResult.Fail("Sync failed");
     }
 
     public void Dispose()

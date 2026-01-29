@@ -44,6 +44,22 @@ CREATE TABLE `attendance` (
 -- --------------------------------------------------------
 
 --
+-- Table structure for table `audit_log`
+--
+
+CREATE TABLE `audit_log` (
+  `id` bigint(20) NOT NULL,
+  `actor` varchar(100) NOT NULL,
+  `action` varchar(100) NOT NULL,
+  `target` varchar(150) DEFAULT NULL,
+  `status` varchar(50) NOT NULL,
+  `message` varchar(255) DEFAULT NULL,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- --------------------------------------------------------
+
+--
 -- Table structure for table `admin_users`
 --
 
@@ -57,6 +73,36 @@ CREATE TABLE `admin_users` (
   `email` varchar(150) DEFAULT NULL,
   `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
   `updated_at` timestamp NULL DEFAULT NULL ON UPDATE current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `login_attempts`
+--
+
+CREATE TABLE `login_attempts` (
+  `id` bigint(20) NOT NULL,
+  `username` varchar(100) NOT NULL,
+  `success` tinyint(1) NOT NULL,
+  `attempted_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  `lockout_until` timestamp NULL DEFAULT NULL,
+  `failure_count` int(11) NOT NULL DEFAULT 0,
+  `message` varchar(255) DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `password_reset`
+--
+
+CREATE TABLE `password_reset` (
+  `id` bigint(20) NOT NULL,
+  `admin_username` varchar(100) NOT NULL,
+  `target_username` varchar(100) NOT NULL,
+  `reset_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  `message` varchar(255) DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- --------------------------------------------------------
@@ -184,11 +230,38 @@ ALTER TABLE `attendance`
   ADD KEY `idx_attendance_date` (`date`);
 
 --
+-- Indexes for table `audit_log`
+--
+ALTER TABLE `audit_log`
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `idx_audit_actor` (`actor`),
+  ADD KEY `idx_audit_action` (`action`),
+  ADD KEY `idx_audit_created_at` (`created_at`);
+
+--
 -- Indexes for table `admin_users`
 --
 ALTER TABLE `admin_users`
   ADD PRIMARY KEY (`id`),
   ADD UNIQUE KEY `uq_admin_users_username` (`username`);
+
+--
+-- Indexes for table `login_attempts`
+--
+ALTER TABLE `login_attempts`
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `idx_login_attempts_username` (`username`),
+  ADD KEY `idx_login_attempts_attempted_at` (`attempted_at`),
+  ADD KEY `idx_login_attempts_lockout_until` (`lockout_until`);
+
+--
+-- Indexes for table `password_reset`
+--
+ALTER TABLE `password_reset`
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `idx_password_reset_admin` (`admin_username`),
+  ADD KEY `idx_password_reset_target` (`target_username`),
+  ADD KEY `idx_password_reset_reset_at` (`reset_at`);
 
 --
 -- Indexes for table `demo_fingerprints`
@@ -243,10 +316,22 @@ ALTER TABLE `attendance`
   MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
 
 --
+-- AUTO_INCREMENT for table `audit_log`
+--
+ALTER TABLE `audit_log`
+  MODIFY `id` bigint(20) NOT NULL AUTO_INCREMENT;
+
+--
 -- AUTO_INCREMENT for table `admin_users`
 --
 ALTER TABLE `admin_users`
   MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `login_attempts`
+--
+ALTER TABLE `login_attempts`
+  MODIFY `id` bigint(20) NOT NULL AUTO_INCREMENT;
 
 --
 -- AUTO_INCREMENT for table `demo_user`
@@ -258,6 +343,12 @@ ALTER TABLE `demo_user`
 -- AUTO_INCREMENT for table `pending_sync`
 --
 ALTER TABLE `pending_sync`
+  MODIFY `id` bigint(20) NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `password_reset`
+--
+ALTER TABLE `password_reset`
   MODIFY `id` bigint(20) NOT NULL AUTO_INCREMENT;
 
 --

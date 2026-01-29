@@ -3,6 +3,7 @@ using BiometricFingerprintsAttendanceSystem.Services.Camera;
 using BiometricFingerprintsAttendanceSystem.Services.Data;
 using BiometricFingerprintsAttendanceSystem.Services.Db;
 using BiometricFingerprintsAttendanceSystem.Services.Fingerprint;
+using BiometricFingerprintsAttendanceSystem.Services.Security;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace BiometricFingerprintsAttendanceSystem.Services;
@@ -26,6 +27,9 @@ public sealed class ServiceRegistry : IServiceRegistry
         Api = _provider.GetRequiredService<BiometricsApiClient>();
         DemoApi = _provider.GetService<DemoBiometricsApiClient>();
         Data = _provider.GetRequiredService<IDataService>();
+        Audit = _provider.GetRequiredService<AuditLogService>();
+        LoginAttempts = _provider.GetRequiredService<LoginAttemptRepository>();
+        PasswordResets = _provider.GetRequiredService<PasswordResetRepository>();
         IsDemoMode = AppState.Config.EnableDemoMode;
     }
 
@@ -41,6 +45,9 @@ public sealed class ServiceRegistry : IServiceRegistry
     public BiometricsApiClient Api { get; }
     public DemoBiometricsApiClient? DemoApi { get; }
     public IDataService Data { get; }
+    public AuditLogService Audit { get; }
+    public LoginAttemptRepository LoginAttempts { get; }
+    public PasswordResetRepository PasswordResets { get; }
     public bool IsDemoMode { get; }
     public IServiceProvider Provider => _provider;
 }

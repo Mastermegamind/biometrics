@@ -80,9 +80,18 @@ public sealed class AdminHomeViewModel : ViewModelBase
             TotalStudents = "0";
         }
 
+        try
+        {
+            var adminCount = await _services.Users.GetAdminCountAsync();
+            AdminCount = adminCount.ToString();
+        }
+        catch
+        {
+            AdminCount = "0";
+        }
+
         // Placeholder values — wire to actual repos when available
         TodayAttendance = "—";
         EnrolledCount = "—";
-        AdminCount = "—";
     }
 }

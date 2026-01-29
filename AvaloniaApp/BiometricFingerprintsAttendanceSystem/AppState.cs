@@ -3,6 +3,7 @@ namespace BiometricFingerprintsAttendanceSystem;
 public sealed class AppState
 {
     private string _currentUserType = string.Empty;
+    private string _currentUsername = string.Empty;
 
     public AppState(AppConfig config)
     {
@@ -22,6 +23,12 @@ public sealed class AppState
                 UserTypeChanged?.Invoke();
             }
         }
+    }
+
+    public string CurrentUsername
+    {
+        get => _currentUsername;
+        set => _currentUsername = value;
     }
 
     public event Action? UserTypeChanged;

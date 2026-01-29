@@ -1,5 +1,4 @@
 using BiometricFingerprintsAttendanceSystem.Services;
-using BCrypt.Net;
 
 namespace BiometricFingerprintsAttendanceSystem.ViewModels;
 
@@ -113,7 +112,7 @@ public sealed class AdminRegistrationViewModel : ViewModelBase
         }
 
         await using var cmd = conn.CreateCommand();
-        var passwordHash = BCrypt.HashPassword(Password);
+        var passwordHash = BCrypt.Net.BCrypt.HashPassword(Password);
 
         cmd.CommandText = "INSERT INTO admin_users (username, usertype, password, name, contactno, email) VALUES (@username, @usertype, @password, @name, @contactno, @email)";
         cmd.Parameters.AddWithValue("@username", Username.Trim());
@@ -125,5 +124,6 @@ public sealed class AdminRegistrationViewModel : ViewModelBase
 
         await cmd.ExecuteNonQueryAsync();
         StatusMessage = "Admin user saved.";
+        await _services.Audit.LogAsync(_services.AppState.CurrentUsername ?? "system", "AdminCreate", Username.Trim(), "Success", "Admin created");
     }
 }

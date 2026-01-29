@@ -1,0 +1,42 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="BiometricFingerprintsAttendanceSystem.Views.DiagnosticsView">
+
+  <StackPanel Spacing="24">
+    <StackPanel Spacing="6">
+      <TextBlock Text="Diagnostics" Classes="PageTitle" />
+      <TextBlock Text="System health and background services"
+                 Classes="PageSubtitle" />
+    </StackPanel>
+
+    <Border Classes="GlassCard">
+      <StackPanel Spacing="16">
+        <TextBlock Text="Health Checks" Classes="SectionHeader" />
+
+        <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto">
+          <TextBlock Grid.Row="0" Grid.Column="0" Text="API" Classes="FieldLabel" Margin="0,0,12,8" />
+          <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding ApiStatus}" Foreground="{Binding ApiBrush}" Margin="0,0,0,8" />
+
+          <TextBlock Grid.Row="1" Grid.Column="0" Text="DATABASE" Classes="FieldLabel" Margin="0,0,12,8" />
+          <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding DbStatus}" Foreground="{Binding DbBrush}" Margin="0,0,0,8" />
+
+          <TextBlock Grid.Row="2" Grid.Column="0" Text="FINGERPRINT" Classes="FieldLabel" Margin="0,0,12,8" />
+          <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding FingerprintStatus}" Foreground="{Binding FingerprintBrush}" Margin="0,0,0,8" />
+
+          <TextBlock Grid.Row="3" Grid.Column="0" Text="SYNC" Classes="FieldLabel" Margin="0,0,12,8" />
+          <TextBlock Grid.Row="3" Grid.Column="1" Text="{Binding SyncStatus}" Margin="0,0,0,8" />
+
+          <TextBlock Grid.Row="4" Grid.Column="0" Text="PENDING" Classes="FieldLabel" />
+          <TextBlock Grid.Row="4" Grid.Column="1" Text="{Binding PendingSync}" />
+        </Grid>
+
+        <Separator Background="{DynamicResource SeparatorBrush}" Height="1" Margin="0,4" />
+
+        <StackPanel Orientation="Horizontal" Spacing="12">
+          <Button Classes="BtnPrimary" Content="Refresh" Command="{Binding RefreshCommand}" />
+          <TextBlock Text="Last checked: {Binding LastChecked}" VerticalAlignment="Center" />
+        </StackPanel>
+      </StackPanel>
+    </Border>
+  </StackPanel>
+</UserControl>
