@@ -6,9 +6,9 @@ public sealed class DbConnectionFactory
 {
     private readonly string _connectionString;
 
-    public DbConnectionFactory(string connectionString)
+    public DbConnectionFactory(AppConfig config)
     {
-        _connectionString = connectionString;
+        _connectionString = config.ConnectionString;
     }
 
     public MySqlConnection Create()
