@@ -30,7 +30,10 @@ public sealed class MainWindowViewModel : ViewModelBase, INavigationService
             ["TimeOut"] = new TimeOutViewModel(services),
             ["Report"] = new AttendanceReportViewModel(services),
             ["AdminReg"] = new AdminRegistrationViewModel(services),
-            ["Demo"] = new DemoViewModel(services)
+            ["Demo"] = new DemoViewModel(services),
+            ["LiveEnrollment"] = new LiveEnrollmentViewModel(services),
+            ["LiveClockIn"] = new LiveClockInViewModel(services),
+            ["LiveClockOut"] = new LiveClockOutViewModel(services)
         };
 
         NavItems = new ObservableCollection<NavItemViewModel>
@@ -39,8 +42,11 @@ public sealed class MainWindowViewModel : ViewModelBase, INavigationService
             new("\U0001F4CA", "Dashboard", () => NavigateToKey("Admin")),
             new("\U0001F464", "Register Student", () => NavigateToKey("Register")),
             new("\U0001F91A", "Enroll Fingerprints", () => NavigateToKey("Enrollment")),
+            new("\U0001F9EC", "Live Enrollment", () => NavigateToKey("LiveEnrollment")),
             new("\u23F1", "Clock In", () => NavigateToKey("TimeIn")),
+            new("\u23F1", "Live Clock In", () => NavigateToKey("LiveClockIn")),
             new("\u23F3", "Clock Out", () => NavigateToKey("TimeOut")),
+            new("\u23F3", "Live Clock Out", () => NavigateToKey("LiveClockOut")),
             new("\U0001F4CB", "Attendance Report", () => NavigateToKey("Report")),
             new("\U0001F6E1", "Admin Registration", () => NavigateToKey("AdminReg"))
         };

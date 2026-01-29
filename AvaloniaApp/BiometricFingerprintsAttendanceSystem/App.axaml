@@ -1,11 +1,20 @@
 <Application xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:local="clr-namespace:BiometricFingerprintsAttendanceSystem"
+             xmlns:converters="clr-namespace:BiometricFingerprintsAttendanceSystem.Converters"
              x:Class="BiometricFingerprintsAttendanceSystem.App"
              RequestedThemeVariant="Default">
 
   <Application.Resources>
     <ResourceDictionary>
+
+      <!-- ── Converters ── -->
+      <converters:BoolToSuccessBackgroundConverter x:Key="BoolToSuccessBackgroundConverter" />
+      <converters:BoolToSuccessColorConverter x:Key="BoolToSuccessColorConverter" />
+      <converters:BoolToCheckmarkConverter x:Key="BoolToCheckmarkConverter" />
+      <converters:BoolToOnlineColorConverter x:Key="BoolToOnlineColorConverter" />
+      <converters:BoolToOnlineTextConverter x:Key="BoolToOnlineTextConverter" />
+      <converters:BoolToColorConverter x:Key="BoolToColorConverter" />
 
       <!-- ── Brand Colors (theme-invariant) ── -->
       <SolidColorBrush x:Key="PrimaryBrush" Color="#8B0000" />

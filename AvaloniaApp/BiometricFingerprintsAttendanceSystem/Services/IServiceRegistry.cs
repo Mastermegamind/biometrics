@@ -1,8 +1,8 @@
 using BiometricFingerprintsAttendanceSystem.Services.Api;
 using BiometricFingerprintsAttendanceSystem.Services.Camera;
+using BiometricFingerprintsAttendanceSystem.Services.Data;
 using BiometricFingerprintsAttendanceSystem.Services.Db;
 using BiometricFingerprintsAttendanceSystem.Services.Fingerprint;
-using Microsoft.Extensions.DependencyInjection;
 
 namespace BiometricFingerprintsAttendanceSystem.Services;
 
@@ -19,6 +19,7 @@ public interface IServiceRegistry
     IFingerprintService Fingerprint { get; }
     BiometricsApiClient Api { get; }
     DemoBiometricsApiClient? DemoApi { get; }
+    IDataService Data { get; }
     bool IsDemoMode { get; }
     IServiceProvider Provider { get; }
 }

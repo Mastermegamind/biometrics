@@ -19,8 +19,16 @@ public abstract class ViewModelBase : INotifyPropertyChanged
         return true;
     }
 
+    // Back-compat helper for view models that previously used SetProperty.
+    protected bool SetProperty<T>(ref T field, T value, [CallerMemberName] string? propertyName = null)
+        => SetField(ref field, value, propertyName);
+
     protected void RaisePropertyChanged([CallerMemberName] string? propertyName = null)
     {
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
     }
+
+    // Back-compat helper for view models that previously used OnPropertyChanged.
+    protected void OnPropertyChanged([CallerMemberName] string? propertyName = null)
+        => RaisePropertyChanged(propertyName);
 }

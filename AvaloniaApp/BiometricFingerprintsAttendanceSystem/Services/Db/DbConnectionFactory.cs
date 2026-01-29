@@ -1,3 +1,4 @@
+using System.Threading;
 using MySqlConnector;
 
 namespace BiometricFingerprintsAttendanceSystem.Services.Db;
@@ -14,5 +15,12 @@ public sealed class DbConnectionFactory
     public MySqlConnection Create()
     {
         return new MySqlConnection(_connectionString);
+    }
+
+    public async Task<MySqlConnection> CreateConnectionAsync(CancellationToken cancellationToken = default)
+    {
+        var connection = new MySqlConnection(_connectionString);
+        await connection.OpenAsync(cancellationToken);
+        return connection;
     }
 }

@@ -4,6 +4,7 @@ using Avalonia.Markup.Xaml;
 using BiometricFingerprintsAttendanceSystem.Services;
 using BiometricFingerprintsAttendanceSystem.Services.Api;
 using BiometricFingerprintsAttendanceSystem.Services.Camera;
+using BiometricFingerprintsAttendanceSystem.Services.Data;
 using BiometricFingerprintsAttendanceSystem.Services.Db;
 using BiometricFingerprintsAttendanceSystem.Services.Fingerprint;
 using BiometricFingerprintsAttendanceSystem.ViewModels;
@@ -56,6 +57,14 @@ public partial class App : Application
         // Configuration & State
         services.AddSingleton(config);
         services.AddSingleton<AppState>();
+        services.AddSingleton(new ApiSettings(
+            config.ApiBaseUrl,
+            config.ApiKey,
+            config.ApiKeyHeader,
+            config.StudentLookupPath,
+            config.EnrollmentStatusPath,
+            config.EnrollmentSubmitPath,
+            config.IdentifyPath));
 
         // Database
         services.AddSingleton<DbConnectionFactory>();
@@ -79,6 +88,11 @@ public partial class App : Application
             });
         }
 
+        // Data Services (Online/Offline/Hybrid modes)
+        services.AddSingleton<OnlineDataProvider>();
+        services.AddSingleton<OfflineDataProvider>();
+        services.AddSingleton<IDataService, DataService>();
+
         // ViewModels
         services.AddTransient<LoginViewModel>();
         services.AddTransient<MainWindowViewModel>();
@@ -91,6 +105,14 @@ public partial class App : Application
         services.AddTransient<EnrollmentViewModel>();
         services.AddTransient<DemoViewModel>();
         services.AddTransient<AttendanceReportViewModel>();
+
+        // Live Mode ViewModels
+        services.AddTransient<LiveEnrollmentViewModel>();
+        services.AddTransient<LiveClockInViewModel>();
+        services.AddTransient<LiveClockOutViewModel>();
+
+        // Sync Manager
+        services.AddSingleton<SyncManager>();
 
         // Logging
         services.AddLogging(logging =>

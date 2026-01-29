@@ -1,4 +1,5 @@
 using System.Text.Json;
+using BiometricFingerprintsAttendanceSystem.Services.Data;
 
 namespace BiometricFingerprintsAttendanceSystem;
 
@@ -18,7 +19,10 @@ public sealed record AppConfig(
     string DemoAdminPassword,
     string DemoStudentRegNo,
     string DemoStudentName,
-    string DemoStudentClass)
+    string DemoStudentClass,
+    SyncMode SyncMode,
+    int ApiTimeoutSeconds,
+    int MinimumFingersRequired)
 {
     private const string DefaultConnectionString = "SERVER=localhost; DATABASE=mda_biometrics; userid=root; PASSWORD=root; PORT=3306;";
     private const string DefaultApiBaseUrl = "https://api.mydreamsacademy.com.ng/biometrics";
@@ -28,233 +32,215 @@ public sealed record AppConfig(
         var path = Path.Combine(AppContext.BaseDirectory, "appsettings.json");
         if (!File.Exists(path))
         {
-            var connectionString = DefaultConnectionString;
-            var fingerprintDevice = "None";
-            var enableFingerprintSdks = false;
-            var apiBaseUrl = DefaultApiBaseUrl;
-            var apiKey = string.Empty;
-            var apiKeyHeader = "x-api-key";
-            var studentLookupPath = "students/{regNo}";
-            var enrollmentStatusPath = "enrollments/{regNo}";
-            var enrollmentSubmitPath = "enrollments";
-            var identifyPath = "identify";
-            var enableDemoMode = false;
-            var demoAdminEmail = "demo@example.com";
-            var demoAdminPassword = "demo1234";
-            var demoStudentRegNo = "DEMO001";
-            var demoStudentName = "Demo Student";
-            var demoStudentClass = "Demo Class";
-
-            ApplyEnvOverrides(
-                ref connectionString,
-                ref fingerprintDevice,
-                ref enableFingerprintSdks,
-                ref apiBaseUrl,
-                ref apiKey,
-                ref apiKeyHeader,
-                ref studentLookupPath,
-                ref enrollmentStatusPath,
-                ref enrollmentSubmitPath,
-                ref identifyPath,
-                ref enableDemoMode,
-                ref demoAdminEmail,
-                ref demoAdminPassword,
-                ref demoStudentRegNo,
-                ref demoStudentName,
-                ref demoStudentClass);
-
-            return new AppConfig(
-                connectionString,
-                fingerprintDevice,
-                enableFingerprintSdks,
-                apiBaseUrl,
-                apiKey,
-                apiKeyHeader,
-                studentLookupPath,
-                enrollmentStatusPath,
-                enrollmentSubmitPath,
-                identifyPath,
-                enableDemoMode,
-                demoAdminEmail,
-                demoAdminPassword,
-                demoStudentRegNo,
-                demoStudentName,
-                demoStudentClass);
+            return CreateDefaultConfig();
         }
 
         try
         {
             using var doc = JsonDocument.Parse(File.ReadAllText(path));
-            var connectionString = DefaultConnectionString;
-            var fingerprintDevice = "None";
-            var enableFingerprintSdks = false;
-            var apiBaseUrl = DefaultApiBaseUrl;
-            var apiKey = string.Empty;
-            var apiKeyHeader = "x-api-key";
-            var studentLookupPath = "students/{regNo}";
-            var enrollmentStatusPath = "enrollments/{regNo}";
-            var enrollmentSubmitPath = "enrollments";
-            var identifyPath = "identify";
-            var enableDemoMode = false;
-            var demoAdminEmail = "demo@example.com";
-            var demoAdminPassword = "demo1234";
-            var demoStudentRegNo = "DEMO001";
-            var demoStudentName = "Demo Student";
-            var demoStudentClass = "Demo Class";
-
-            if (doc.RootElement.TryGetProperty("ConnectionStrings", out var conns) &&
-                conns.TryGetProperty("Default", out var def) &&
-                def.ValueKind == JsonValueKind.String)
-            {
-                var value = def.GetString();
-                if (!string.IsNullOrWhiteSpace(value))
-                {
-                    connectionString = value;
-                }
-            }
-
-            if (doc.RootElement.TryGetProperty("Fingerprint", out var fingerprint))
-            {
-                if (fingerprint.TryGetProperty("Device", out var device) && device.ValueKind == JsonValueKind.String)
-                {
-                    fingerprintDevice = device.GetString() ?? fingerprintDevice;
-                }
-
-                if (fingerprint.TryGetProperty("EnableSdks", out var enable) && enable.ValueKind == JsonValueKind.True)
-                {
-                    enableFingerprintSdks = true;
-                }
-            }
-
-            if (doc.RootElement.TryGetProperty("Api", out var api))
-            {
-                if (api.TryGetProperty("BaseUrl", out var baseUrl) && baseUrl.ValueKind == JsonValueKind.String)
-                {
-                    apiBaseUrl = baseUrl.GetString() ?? apiBaseUrl;
-                }
-
-                if (api.TryGetProperty("ApiKey", out var key) && key.ValueKind == JsonValueKind.String)
-                {
-                    apiKey = key.GetString() ?? apiKey;
-                }
-
-                if (api.TryGetProperty("ApiKeyHeader", out var header) && header.ValueKind == JsonValueKind.String)
-                {
-                    apiKeyHeader = header.GetString() ?? apiKeyHeader;
-                }
-
-                if (api.TryGetProperty("StudentLookupPath", out var lookup) && lookup.ValueKind == JsonValueKind.String)
-                {
-                    studentLookupPath = lookup.GetString() ?? studentLookupPath;
-                }
-
-                if (api.TryGetProperty("EnrollmentStatusPath", out var status) && status.ValueKind == JsonValueKind.String)
-                {
-                    enrollmentStatusPath = status.GetString() ?? enrollmentStatusPath;
-                }
-
-                if (api.TryGetProperty("EnrollmentSubmitPath", out var submit) && submit.ValueKind == JsonValueKind.String)
-                {
-                    enrollmentSubmitPath = submit.GetString() ?? enrollmentSubmitPath;
-                }
-
-                if (api.TryGetProperty("IdentifyPath", out var identify) && identify.ValueKind == JsonValueKind.String)
-                {
-                    identifyPath = identify.GetString() ?? identifyPath;
-                }
-            }
-
-            // Parse Demo configuration
-            if (doc.RootElement.TryGetProperty("Demo", out var demo))
-            {
-                if (demo.TryGetProperty("Enabled", out var enabled) && enabled.ValueKind == JsonValueKind.True)
-                {
-                    enableDemoMode = true;
-                }
-
-                if (demo.TryGetProperty("AdminEmail", out var adminEmail) && adminEmail.ValueKind == JsonValueKind.String)
-                {
-                    demoAdminEmail = adminEmail.GetString() ?? demoAdminEmail;
-                }
-
-                if (demo.TryGetProperty("AdminPassword", out var adminPassword) && adminPassword.ValueKind == JsonValueKind.String)
-                {
-                    demoAdminPassword = adminPassword.GetString() ?? demoAdminPassword;
-                }
-
-                if (demo.TryGetProperty("StudentRegNo", out var studentRegNo) && studentRegNo.ValueKind == JsonValueKind.String)
-                {
-                    demoStudentRegNo = studentRegNo.GetString() ?? demoStudentRegNo;
-                }
-
-                if (demo.TryGetProperty("StudentName", out var studentName) && studentName.ValueKind == JsonValueKind.String)
-                {
-                    demoStudentName = studentName.GetString() ?? demoStudentName;
-                }
-
-                if (demo.TryGetProperty("StudentClass", out var studentClass) && studentClass.ValueKind == JsonValueKind.String)
-                {
-                    demoStudentClass = studentClass.GetString() ?? demoStudentClass;
-                }
-            }
-
-            ApplyEnvOverrides(
-                ref connectionString,
-                ref fingerprintDevice,
-                ref enableFingerprintSdks,
-                ref apiBaseUrl,
-                ref apiKey,
-                ref apiKeyHeader,
-                ref studentLookupPath,
-                ref enrollmentStatusPath,
-                ref enrollmentSubmitPath,
-                ref identifyPath,
-                ref enableDemoMode,
-                ref demoAdminEmail,
-                ref demoAdminPassword,
-                ref demoStudentRegNo,
-                ref demoStudentName,
-                ref demoStudentClass);
-
-            return new AppConfig(
-                connectionString,
-                fingerprintDevice,
-                enableFingerprintSdks,
-                apiBaseUrl,
-                apiKey,
-                apiKeyHeader,
-                studentLookupPath,
-                enrollmentStatusPath,
-                enrollmentSubmitPath,
-                identifyPath,
-                enableDemoMode,
-                demoAdminEmail,
-                demoAdminPassword,
-                demoStudentRegNo,
-                demoStudentName,
-                demoStudentClass);
+            return ParseConfig(doc);
         }
         catch
         {
+            return CreateDefaultConfig();
         }
+    }
+
+    private static AppConfig CreateDefaultConfig()
+    {
+        var connectionString = DefaultConnectionString;
+        var fingerprintDevice = "None";
+        var enableFingerprintSdks = false;
+        var apiBaseUrl = DefaultApiBaseUrl;
+        var apiKey = string.Empty;
+        var apiKeyHeader = "x-api-key";
+        var studentLookupPath = "students/{regNo}";
+        var enrollmentStatusPath = "enrollments/{regNo}";
+        var enrollmentSubmitPath = "enrollments";
+        var identifyPath = "identify";
+        var enableDemoMode = false;
+        var demoAdminEmail = "demo@example.com";
+        var demoAdminPassword = "demo1234";
+        var demoStudentRegNo = "DEMO001";
+        var demoStudentName = "Demo Student";
+        var demoStudentClass = "Demo Class";
+        var syncMode = SyncMode.OnlineFirst;
+        var apiTimeoutSeconds = 30;
+        var minimumFingersRequired = 2;
+
+        ApplyEnvOverrides(
+            ref connectionString, ref fingerprintDevice, ref enableFingerprintSdks,
+            ref apiBaseUrl, ref apiKey, ref apiKeyHeader,
+            ref studentLookupPath, ref enrollmentStatusPath, ref enrollmentSubmitPath, ref identifyPath,
+            ref enableDemoMode, ref demoAdminEmail, ref demoAdminPassword,
+            ref demoStudentRegNo, ref demoStudentName, ref demoStudentClass,
+            ref syncMode, ref apiTimeoutSeconds, ref minimumFingersRequired);
 
         return new AppConfig(
-            DefaultConnectionString,
-            "None",
-            false,
-            DefaultApiBaseUrl,
-            string.Empty,
-            "x-api-key",
-            "students/{regNo}",
-            "enrollments/{regNo}",
-            "enrollments",
-            "identify",
-            false,
-            "demo@example.com",
-            "demo1234",
-            "DEMO001",
-            "Demo Student",
-            "Demo Class");
+            connectionString, fingerprintDevice, enableFingerprintSdks,
+            apiBaseUrl, apiKey, apiKeyHeader,
+            studentLookupPath, enrollmentStatusPath, enrollmentSubmitPath, identifyPath,
+            enableDemoMode, demoAdminEmail, demoAdminPassword,
+            demoStudentRegNo, demoStudentName, demoStudentClass,
+            syncMode, apiTimeoutSeconds, minimumFingersRequired);
+    }
+
+    private static AppConfig ParseConfig(JsonDocument doc)
+    {
+        var connectionString = DefaultConnectionString;
+        var fingerprintDevice = "None";
+        var enableFingerprintSdks = false;
+        var apiBaseUrl = DefaultApiBaseUrl;
+        var apiKey = string.Empty;
+        var apiKeyHeader = "x-api-key";
+        var studentLookupPath = "students/{regNo}";
+        var enrollmentStatusPath = "enrollments/{regNo}";
+        var enrollmentSubmitPath = "enrollments";
+        var identifyPath = "identify";
+        var enableDemoMode = false;
+        var demoAdminEmail = "demo@example.com";
+        var demoAdminPassword = "demo1234";
+        var demoStudentRegNo = "DEMO001";
+        var demoStudentName = "Demo Student";
+        var demoStudentClass = "Demo Class";
+        var syncMode = SyncMode.OnlineFirst;
+        var apiTimeoutSeconds = 30;
+        var minimumFingersRequired = 2;
+
+        // Parse ConnectionStrings
+        if (doc.RootElement.TryGetProperty("ConnectionStrings", out var conns) &&
+            conns.TryGetProperty("Default", out var def) &&
+            def.ValueKind == JsonValueKind.String)
+        {
+            var value = def.GetString();
+            if (!string.IsNullOrWhiteSpace(value))
+            {
+                connectionString = value;
+            }
+        }
+
+        // Parse Fingerprint
+        if (doc.RootElement.TryGetProperty("Fingerprint", out var fingerprint))
+        {
+            if (fingerprint.TryGetProperty("Device", out var device) && device.ValueKind == JsonValueKind.String)
+            {
+                fingerprintDevice = device.GetString() ?? fingerprintDevice;
+            }
+
+            if (fingerprint.TryGetProperty("EnableSdks", out var enable) && enable.ValueKind == JsonValueKind.True)
+            {
+                enableFingerprintSdks = true;
+            }
+
+            if (fingerprint.TryGetProperty("MinimumFingers", out var minFingers) && minFingers.ValueKind == JsonValueKind.Number)
+            {
+                minimumFingersRequired = minFingers.GetInt32();
+            }
+        }
+
+        // Parse Api
+        if (doc.RootElement.TryGetProperty("Api", out var api))
+        {
+            if (api.TryGetProperty("BaseUrl", out var baseUrl) && baseUrl.ValueKind == JsonValueKind.String)
+            {
+                apiBaseUrl = baseUrl.GetString() ?? apiBaseUrl;
+            }
+
+            if (api.TryGetProperty("ApiKey", out var key) && key.ValueKind == JsonValueKind.String)
+            {
+                apiKey = key.GetString() ?? apiKey;
+            }
+
+            if (api.TryGetProperty("ApiKeyHeader", out var header) && header.ValueKind == JsonValueKind.String)
+            {
+                apiKeyHeader = header.GetString() ?? apiKeyHeader;
+            }
+
+            if (api.TryGetProperty("StudentLookupPath", out var lookup) && lookup.ValueKind == JsonValueKind.String)
+            {
+                studentLookupPath = lookup.GetString() ?? studentLookupPath;
+            }
+
+            if (api.TryGetProperty("EnrollmentStatusPath", out var status) && status.ValueKind == JsonValueKind.String)
+            {
+                enrollmentStatusPath = status.GetString() ?? enrollmentStatusPath;
+            }
+
+            if (api.TryGetProperty("EnrollmentSubmitPath", out var submit) && submit.ValueKind == JsonValueKind.String)
+            {
+                enrollmentSubmitPath = submit.GetString() ?? enrollmentSubmitPath;
+            }
+
+            if (api.TryGetProperty("IdentifyPath", out var identify) && identify.ValueKind == JsonValueKind.String)
+            {
+                identifyPath = identify.GetString() ?? identifyPath;
+            }
+
+            if (api.TryGetProperty("TimeoutSeconds", out var timeout) && timeout.ValueKind == JsonValueKind.Number)
+            {
+                apiTimeoutSeconds = timeout.GetInt32();
+            }
+
+            // Parse SyncMode
+            if (api.TryGetProperty("SyncMode", out var syncModeValue) && syncModeValue.ValueKind == JsonValueKind.String)
+            {
+                var syncModeStr = syncModeValue.GetString();
+                if (Enum.TryParse<SyncMode>(syncModeStr, ignoreCase: true, out var parsedMode))
+                {
+                    syncMode = parsedMode;
+                }
+            }
+        }
+
+        // Parse Demo
+        if (doc.RootElement.TryGetProperty("Demo", out var demo))
+        {
+            if (demo.TryGetProperty("Enabled", out var enabled) && enabled.ValueKind == JsonValueKind.True)
+            {
+                enableDemoMode = true;
+            }
+
+            if (demo.TryGetProperty("AdminEmail", out var adminEmail) && adminEmail.ValueKind == JsonValueKind.String)
+            {
+                demoAdminEmail = adminEmail.GetString() ?? demoAdminEmail;
+            }
+
+            if (demo.TryGetProperty("AdminPassword", out var adminPassword) && adminPassword.ValueKind == JsonValueKind.String)
+            {
+                demoAdminPassword = adminPassword.GetString() ?? demoAdminPassword;
+            }
+
+            if (demo.TryGetProperty("StudentRegNo", out var studentRegNo) && studentRegNo.ValueKind == JsonValueKind.String)
+            {
+                demoStudentRegNo = studentRegNo.GetString() ?? demoStudentRegNo;
+            }
+
+            if (demo.TryGetProperty("StudentName", out var studentName) && studentName.ValueKind == JsonValueKind.String)
+            {
+                demoStudentName = studentName.GetString() ?? demoStudentName;
+            }
+
+            if (demo.TryGetProperty("StudentClass", out var studentClass) && studentClass.ValueKind == JsonValueKind.String)
+            {
+                demoStudentClass = studentClass.GetString() ?? demoStudentClass;
+            }
+        }
+
+        ApplyEnvOverrides(
+            ref connectionString, ref fingerprintDevice, ref enableFingerprintSdks,
+            ref apiBaseUrl, ref apiKey, ref apiKeyHeader,
+            ref studentLookupPath, ref enrollmentStatusPath, ref enrollmentSubmitPath, ref identifyPath,
+            ref enableDemoMode, ref demoAdminEmail, ref demoAdminPassword,
+            ref demoStudentRegNo, ref demoStudentName, ref demoStudentClass,
+            ref syncMode, ref apiTimeoutSeconds, ref minimumFingersRequired);
+
+        return new AppConfig(
+            connectionString, fingerprintDevice, enableFingerprintSdks,
+            apiBaseUrl, apiKey, apiKeyHeader,
+            studentLookupPath, enrollmentStatusPath, enrollmentSubmitPath, identifyPath,
+            enableDemoMode, demoAdminEmail, demoAdminPassword,
+            demoStudentRegNo, demoStudentName, demoStudentClass,
+            syncMode, apiTimeoutSeconds, minimumFingersRequired);
     }
 
     private static void ApplyEnvOverrides(
@@ -273,9 +259,11 @@ public sealed record AppConfig(
         ref string demoAdminPassword,
         ref string demoStudentRegNo,
         ref string demoStudentName,
-        ref string demoStudentClass)
+        ref string demoStudentClass,
+        ref SyncMode syncMode,
+        ref int apiTimeoutSeconds,
+        ref int minimumFingersRequired)
     {
-        // Use a simpler approach without lambdas to avoid ref parameter issues
         ApplyEnvVariable("BIOCLOCK_CONNECTION_STRING", ref connectionString);
         ApplyEnvVariable("BIOCLOCK_FINGERPRINT_DEVICE", ref fingerprintDevice);
         ApplyEnvVariable("BIOCLOCK_ENABLE_FINGERPRINT_SDKS", ref enableFingerprintSdks);
@@ -292,6 +280,9 @@ public sealed record AppConfig(
         ApplyEnvVariable("BIOCLOCK_DEMO_STUDENT_REGNO", ref demoStudentRegNo);
         ApplyEnvVariable("BIOCLOCK_DEMO_STUDENT_NAME", ref demoStudentName);
         ApplyEnvVariable("BIOCLOCK_DEMO_STUDENT_CLASS", ref demoStudentClass);
+        ApplyEnvVariable("BIOCLOCK_SYNC_MODE", ref syncMode);
+        ApplyEnvVariable("BIOCLOCK_API_TIMEOUT", ref apiTimeoutSeconds);
+        ApplyEnvVariable("BIOCLOCK_MIN_FINGERS", ref minimumFingersRequired);
     }
 
     private static void ApplyEnvVariable(string envKey, ref string value)
@@ -307,6 +298,24 @@ public sealed record AppConfig(
     {
         var envValue = Environment.GetEnvironmentVariable(envKey);
         if (bool.TryParse(envValue, out var parsedValue))
+        {
+            value = parsedValue;
+        }
+    }
+
+    private static void ApplyEnvVariable(string envKey, ref int value)
+    {
+        var envValue = Environment.GetEnvironmentVariable(envKey);
+        if (int.TryParse(envValue, out var parsedValue))
+        {
+            value = parsedValue;
+        }
+    }
+
+    private static void ApplyEnvVariable(string envKey, ref SyncMode value)
+    {
+        var envValue = Environment.GetEnvironmentVariable(envKey);
+        if (Enum.TryParse<SyncMode>(envValue, ignoreCase: true, out var parsedValue))
         {
             value = parsedValue;
         }

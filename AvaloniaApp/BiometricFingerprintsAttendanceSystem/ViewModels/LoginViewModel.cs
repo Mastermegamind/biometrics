@@ -30,8 +30,8 @@ public sealed class LoginViewModel : ViewModelBase
 
         OpenLoginCommand = new RelayCommand(OpenLogin);
         CloseLoginCommand = new RelayCommand(CloseLogin);
-        ClockInCommand = new RelayCommand(() => _navigation.NavigateToKey("TimeIn"));
-        ClockOutCommand = new RelayCommand(() => _navigation.NavigateToKey("TimeOut"));
+        ClockInCommand = new RelayCommand(() => _navigation.NavigateToKey("LiveClockIn"));
+        ClockOutCommand = new RelayCommand(() => _navigation.NavigateToKey("LiveClockOut"));
         LoginCommand = new AsyncRelayCommand(LoginAsync, CanLogin);
 
         _monitorTimer = new DispatcherTimer

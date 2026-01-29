@@ -35,6 +35,10 @@ public sealed class FingerprintCaptureResult
     /// </summary>
     public string? ErrorMessage { get; init; }
 
+    // Back-compat aliases for older view-model expectations.
+    public string? Message => ErrorMessage;
+    public byte[]? ImageData => SampleData;
+
     /// <summary>
     /// Creates a successful capture result.
     /// </summary>

@@ -8,8 +8,8 @@ public sealed class UserHomeViewModel : ViewModelBase
     {
         _nav = nav;
 
-        NavigateClockInCommand = new RelayCommand(() => _nav.NavigateToKey("TimeIn"));
-        NavigateClockOutCommand = new RelayCommand(() => _nav.NavigateToKey("TimeOut"));
+        NavigateClockInCommand = new RelayCommand(() => _nav.NavigateToKey("LiveClockIn"));
+        NavigateClockOutCommand = new RelayCommand(() => _nav.NavigateToKey("LiveClockOut"));
         NavigateReportCommand = new RelayCommand(() => _nav.NavigateToKey("Report"));
     }
 
