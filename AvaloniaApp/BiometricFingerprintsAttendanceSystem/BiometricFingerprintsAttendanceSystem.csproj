@@ -1,7 +1,11 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <OutputType>WinExe</OutputType>
-    <TargetFrameworks>net8.0;net9.0;net10.0</TargetFrameworks>
+    <!-- Use Exe in Debug to show console logs, WinExe in Release to hide console -->
+    <OutputType Condition="'$(Configuration)' == 'Debug'">Exe</OutputType>
+    <OutputType Condition="'$(Configuration)' != 'Debug'">WinExe</OutputType>
+    <!-- Use Windows-specific TFM when building with fingerprint SDKs for WinForms support -->
+    <TargetFrameworks Condition="'$(IncludeFingerprintSdks)' != 'true'">net8.0;net9.0;net10.0</TargetFrameworks>
+    <TargetFrameworks Condition="'$(IncludeFingerprintSdks)' == 'true'">net8.0-windows;net9.0-windows;net10.0-windows</TargetFrameworks>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
@@ -24,6 +28,14 @@
   </ItemGroup>
 
   <!-- Windows-only fingerprint SDKs: enable by setting IncludeFingerprintSdks=true and providing SDK paths. -->
+  <PropertyGroup Condition="'$(IncludeFingerprintSdks)' == 'true'">
+    <DefineConstants>$(DefineConstants);DIGITALPERSONA_SDK</DefineConstants>
+    <UseWindowsForms>true</UseWindowsForms>
+    <!-- Enable binding redirects for .NET Framework SDK compatibility -->
+    <AutoGenerateBindingRedirects>true</AutoGenerateBindingRedirects>
+    <GenerateBindingRedirectsOutputType>true</GenerateBindingRedirectsOutputType>
+  </PropertyGroup>
+
   <ItemGroup Condition="'$(IncludeFingerprintSdks)' == 'true'">
     <Reference Include="DPFPDevNET">
       <HintPath>$(DigitalPersonaSdkPath)\DPFPDevNET.dll</HintPath>
@@ -45,6 +57,10 @@
       <HintPath>$(DigitalPersonaSdkPath)\DPFPVerNET.dll</HintPath>
       <Private>true</Private>
     </Reference>
+  </ItemGroup>
+
+  <!-- Mantra SDK: enable by setting IncludeMantraSdk=true and providing MantraSdkPath -->
+  <ItemGroup Condition="'$(IncludeMantraSdk)' == 'true' AND '$(MantraSdkPath)' != ''">
     <Reference Include="MFS100">
       <HintPath>$(MantraSdkPath)\MFS100.dll</HintPath>
       <Private>true</Private>
@@ -54,5 +70,7 @@
   <ItemGroup>
     <AvaloniaResource Include="Assets/**" />
     <None Include="appsettings.json" CopyToOutputDirectory="Always" />
+    <None Include=".env" CopyToOutputDirectory="PreserveNewest" Condition="Exists('.env')" />
+    <None Include="App.config" CopyToOutputDirectory="PreserveNewest" Condition="Exists('App.config')" />
   </ItemGroup>
 </Project>

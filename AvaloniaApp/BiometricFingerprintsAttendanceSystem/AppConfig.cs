@@ -27,7 +27,7 @@ public sealed record AppConfig(
     int MinimumFingersRequired,
     int CaptureTimeoutSeconds)
 {
-    private const string DefaultConnectionString = "SERVER=localhost; DATABASE=mda_biometrics; userid=root; PASSWORD=root; PORT=3306;";
+    private const string DefaultConnectionString = "Server=localhost;Database=mda_biometrics;Uid=root;Pwd=;Port=3319;";
     private const string DefaultApiBaseUrl = "https://portal.mydreamsacademy.com.ng";
 
     public static AppConfig Load()

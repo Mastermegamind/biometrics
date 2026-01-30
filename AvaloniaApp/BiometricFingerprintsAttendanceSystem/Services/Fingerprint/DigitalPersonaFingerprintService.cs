@@ -28,7 +28,6 @@ public sealed class DigitalPersonaFingerprintService : FingerprintServiceBase
 #if DIGITALPERSONA_SDK
     private Capture? _capture;
     private Enrollment? _enrollment;
-    private Verification? _verification;
     private readonly object _syncLock = new();
 #endif
 
@@ -49,7 +48,6 @@ public sealed class DigitalPersonaFingerprintService : FingerprintServiceBase
         {
             _capture = new Capture();
             _enrollment = new Enrollment();
-            _verification = new Verification();
 
             _capture.EventHandler = this;
 
@@ -182,15 +180,19 @@ public sealed class DigitalPersonaFingerprintService : FingerprintServiceBase
 #if DIGITALPERSONA_SDK
         try
         {
-            var sample = new Sample(sampleData);
+            using var stream = new MemoryStream(sampleData);
+            var sample = new Sample(stream);
             var featureExtractor = new FeatureExtraction();
             var features = new FeatureSet();
+            var feedback = CaptureFeedback.None;
 
-            var result = featureExtractor.CreateFeatureSet(sample, DataPurpose.Enrollment, ref features);
+            featureExtractor.CreateFeatureSet(sample, DataPurpose.Enrollment, ref feedback, ref features);
 
-            if (result == CaptureFeedback.Good)
+            if (feedback == CaptureFeedback.Good)
             {
-                return Task.FromResult<byte[]?>(features.Bytes);
+                using var outputStream = new MemoryStream();
+                features.Serialize(outputStream);
+                return Task.FromResult<byte[]?>(outputStream.ToArray());
             }
 
             return Task.FromResult<byte[]?>(null);
@@ -209,15 +211,13 @@ public sealed class DigitalPersonaFingerprintService : FingerprintServiceBase
 #if DIGITALPERSONA_SDK
         try
         {
-            if (_verification is null)
-            {
-                return Task.FromResult(FingerprintVerifyResult.Error("Device not initialized."));
-            }
+            using var sampleStream = new MemoryStream(sample);
+            using var templateStream = new MemoryStream(template);
 
-            var sampleFeatures = new FeatureSet(sample);
-            var templateObj = new Template(template);
+            var sampleFeatures = new FeatureSet(sampleStream);
+            var templateObj = new Template(templateStream);
 
-            var result = _verification.Verify(sampleFeatures, templateObj);
+            var result = Verification.Verify(sampleFeatures, templateObj);
 
             if (result.Verified)
             {
@@ -242,17 +242,14 @@ public sealed class DigitalPersonaFingerprintService : FingerprintServiceBase
 #if DIGITALPERSONA_SDK
         try
         {
-            if (_verification is null)
-            {
-                return Task.FromResult<FingerprintMatchResult?>(null);
-            }
-
-            var sampleFeatures = new FeatureSet(sample);
+            using var sampleStream = new MemoryStream(sample);
+            var sampleFeatures = new FeatureSet(sampleStream);
 
             foreach (var (matricNo, templateData) in templates)
             {
-                var template = new Template(templateData);
-                var result = _verification.Verify(sampleFeatures, template);
+                using var templateStream = new MemoryStream(templateData);
+                var template = new Template(templateStream);
+                var result = Verification.Verify(sampleFeatures, template);
 
                 if (result.Verified)
                 {
@@ -317,7 +314,8 @@ public sealed class DigitalPersonaFingerprintService : FingerprintServiceBase
 #if DIGITALPERSONA_SDK
         try
         {
-            var sampleObj = new Sample(sample);
+            using var stream = new MemoryStream(sample);
+            var sampleObj = new Sample(stream);
             // Quality is embedded in the sample metadata
             return 80; // Default quality for valid samples
         }
@@ -341,18 +339,40 @@ public sealed class DigitalPersonaFingerprintService : FingerprintServiceBase
         {
             var featureExtractor = new FeatureExtraction();
             var features = new FeatureSet();
-            var result = featureExtractor.CreateFeatureSet(sample, DataPurpose.Verification, ref features);
+            var feedback = CaptureFeedback.None;
 
-            var captureResult = result switch
+            featureExtractor.CreateFeatureSet(sample, DataPurpose.Verification, ref feedback, ref features);
+
+            // Serialize sample and features to byte arrays
+            byte[] sampleBytes;
+            byte[]? featureBytes = null;
+
+            using (var sampleStream = new MemoryStream())
             {
-                CaptureFeedback.Good => FingerprintCaptureResult.Successful(sample.Bytes, features.Bytes, 85),
+                sample.Serialize(sampleStream);
+                sampleBytes = sampleStream.ToArray();
+            }
+
+            if (feedback == CaptureFeedback.Good)
+            {
+                using var featureStream = new MemoryStream();
+                features.Serialize(featureStream);
+                featureBytes = featureStream.ToArray();
+            }
+
+            var captureResult = feedback switch
+            {
+                CaptureFeedback.Good => FingerprintCaptureResult.Successful(sampleBytes, featureBytes, 85),
                 CaptureFeedback.None => FingerprintCaptureResult.Failed(FingerprintCaptureStatus.NoFinger),
                 CaptureFeedback.TooLight => FingerprintCaptureResult.Failed(FingerprintCaptureStatus.PoorQuality, "Image too light. Press harder."),
-                CaptureFeedback.TooWet => FingerprintCaptureResult.Failed(FingerprintCaptureStatus.TooWet),
-                CaptureFeedback.TooDry => FingerprintCaptureResult.Failed(FingerprintCaptureStatus.TooDry),
                 CaptureFeedback.TooNoisy => FingerprintCaptureResult.Failed(FingerprintCaptureStatus.PoorQuality, "Image too noisy. Clean the sensor."),
                 CaptureFeedback.LowContrast => FingerprintCaptureResult.Failed(FingerprintCaptureStatus.PoorQuality, "Low contrast. Adjust finger position."),
-                CaptureFeedback.Unknown => FingerprintCaptureResult.Failed(FingerprintCaptureStatus.Unknown),
+                CaptureFeedback.NotEnoughFeatures => FingerprintCaptureResult.Failed(FingerprintCaptureStatus.PoorQuality, "Not enough features. Try again."),
+                CaptureFeedback.TooSmall => FingerprintCaptureResult.Failed(FingerprintCaptureStatus.Partial, "Image too small. Center your finger."),
+                CaptureFeedback.TooShort => FingerprintCaptureResult.Failed(FingerprintCaptureStatus.TooFast, "Swipe too short."),
+                CaptureFeedback.TooSlow => FingerprintCaptureResult.Failed(FingerprintCaptureStatus.TooSlow, "Swipe too slow."),
+                CaptureFeedback.TooFast => FingerprintCaptureResult.Failed(FingerprintCaptureStatus.TooFast, "Swipe too fast."),
+                CaptureFeedback.TooSkewed => FingerprintCaptureResult.Failed(FingerprintCaptureStatus.PoorQuality, "Finger too skewed."),
                 _ => FingerprintCaptureResult.Failed(FingerprintCaptureStatus.Unknown)
             };
 
@@ -361,7 +381,7 @@ public sealed class DigitalPersonaFingerprintService : FingerprintServiceBase
             OnFingerprintCaptured(new FingerprintCaptureEventArgs
             {
                 Success = captureResult.Success,
-                SampleData = sample.Bytes,
+                SampleData = sampleBytes,
                 TemplateData = captureResult.TemplateData,
                 Quality = captureResult.Quality,
                 Status = captureResult.Status

@@ -15,6 +15,7 @@ using BiometricFingerprintsAttendanceSystem.Views;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using System;
+using System.IO;
 using System.Threading.Tasks;
 
 namespace BiometricFingerprintsAttendanceSystem;
@@ -38,6 +39,10 @@ public partial class App : Application
 
             var serviceProvider = ConfigureServices();
             var services = new ServiceRegistry(serviceProvider);
+
+            // Run startup diagnostics
+            await RunStartupDiagnosticsAsync(serviceProvider, services);
+
             serviceProvider.GetRequiredService<SyncManager>().Start();
             serviceProvider.GetRequiredService<EnrollmentCacheRefresher>().Start();
             _ = Task.Run(async () => await services.Fingerprint.InitializeAsync());
@@ -53,6 +58,77 @@ public partial class App : Application
         }
 
         base.OnFrameworkInitializationCompleted();
+    }
+
+    private static async Task RunStartupDiagnosticsAsync(IServiceProvider serviceProvider, ServiceRegistry services)
+    {
+        var logger = serviceProvider.GetRequiredService<ILogger<App>>();
+        var config = serviceProvider.GetRequiredService<AppConfig>();
+
+        logger.LogInformation("========== STARTUP DIAGNOSTICS ==========");
+        logger.LogInformation("API Base URL: {ApiBaseUrl}", config.ApiBaseUrl);
+        logger.LogInformation("API Key Header: {ApiKeyHeader}", config.ApiKeyHeader);
+        logger.LogInformation("API Key: {ApiKey}", string.IsNullOrEmpty(config.ApiKey) ? "(not set)" : $"{config.ApiKey[..8]}...(truncated)");
+        logger.LogInformation("Fingerprint Device Config: {Device}", config.FingerprintDevice);
+        logger.LogInformation("Demo Mode: {DemoMode}", config.EnableDemoMode);
+        logger.LogInformation("Sync Mode: {SyncMode}", config.SyncMode);
+
+        // Test Database Connection
+        logger.LogInformation("--- Database Connection Test ---");
+        logger.LogInformation("Connection String: {ConnStr}", MaskConnectionString(config.ConnectionString));
+        try
+        {
+            var dbFactory = serviceProvider.GetRequiredService<DbConnectionFactory>();
+            using var connection = await dbFactory.CreateConnectionAsync();
+            logger.LogInformation("Database connection: SUCCESS");
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Database connection: FAILED - {Message}", ex.Message);
+        }
+
+        // Test API Health
+        logger.LogInformation("--- API Health Check ---");
+        try
+        {
+            var onlineProvider = serviceProvider.GetRequiredService<OnlineDataProvider>();
+            var apiHealthy = await onlineProvider.PingAsync();
+            logger.LogInformation("API health check: {Status}", apiHealthy ? "SUCCESS" : "FAILED (not reachable)");
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "API health check: FAILED - {Message}", ex.Message);
+        }
+
+        // Test Fingerprint Device
+        logger.LogInformation("--- Fingerprint Device Detection ---");
+        try
+        {
+            var fpService = services.Fingerprint;
+            logger.LogInformation("Fingerprint service type: {Type}", fpService.GetType().Name);
+            logger.LogInformation("Fingerprint device available: {Available}", fpService.IsDeviceAvailable);
+            if (!fpService.IsDeviceAvailable)
+            {
+                logger.LogWarning("No fingerprint device detected. Enrollment/verification will not work.");
+            }
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Fingerprint detection: FAILED - {Message}", ex.Message);
+        }
+
+        logger.LogInformation("========== END DIAGNOSTICS ==========");
+    }
+
+    private static string MaskConnectionString(string connStr)
+    {
+        if (string.IsNullOrEmpty(connStr)) return "(not set)";
+        // Mask password but show other parts
+        return System.Text.RegularExpressions.Regex.Replace(
+            connStr,
+            @"(Pwd|Password)=[^;]*",
+            "$1=***",
+            System.Text.RegularExpressions.RegexOptions.IgnoreCase);
     }
 
     private static IServiceProvider ConfigureServices()
@@ -173,16 +249,21 @@ public partial class App : Application
     {
         if (OperatingSystem.IsWindows())
         {
-            if (config.EnableFingerprintSdks)
+            // Windows: Use DigitalPersona SDK for fingerprint capture, with fallback to WBF
+            try
             {
                 return new DigitalPersonaFingerprintService();
             }
-            return new WindowsBiometricFingerprintService();
+            catch
+            {
+                // Fall back to Windows Biometric Framework if SDK fails to load
+                return new WindowsBiometricFingerprintService();
+            }
         }
 
         if (OperatingSystem.IsLinux())
         {
-            // Prefer direct libfprint bindings for raw template access
+            // Linux: Use direct libfprint bindings for raw template access
             return new LinuxLibfprintService(logger, config.CaptureTimeoutSeconds, forceReopenBeforeCapture: false);
         }
 

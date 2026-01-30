@@ -1,3 +1,4 @@
+using System;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
@@ -345,6 +346,14 @@ public class LiveEnrollmentViewModel : ViewModelBase
 
         try
         {
+            // Check if fingerprint device is available
+            if (!_services.Fingerprint.IsDeviceAvailable)
+            {
+                StatusMessage = "Fingerprint scanner not connected. Please connect the device and try again.";
+                _logger.LogWarning("Live enrollment capture failed for RegNo {RegNo}: No device connected", RegNo.Trim());
+                return;
+            }
+
             // Initialize fingerprint device if needed
             var initResult = await _services.Fingerprint.InitializeAsync();
             if (!initResult)
@@ -404,10 +413,20 @@ public class LiveEnrollmentViewModel : ViewModelBase
             EnrolledCount = CapturedTemplates.Count;
 
             // Display captured image if available
-            if (captureResult.ImageData != null && captureResult.ImageData.Length > 0)
+            if (captureResult.ImageData is { Length: > 0 })
             {
-                using var stream = new MemoryStream(captureResult.ImageData);
-                CurrentFingerprintImage = new Bitmap(stream);
+                if (TryDecodeBitmap(captureResult.ImageData, out var bmp))
+                {
+                    CurrentFingerprintImage = bmp;
+                }
+                else
+                {
+                    _logger.LogWarning("Fingerprint device returned image bytes that could not be decoded; continuing without preview");
+                }
+            }
+            else
+            {
+                _logger.LogInformation("Fingerprint device did not return preview image; skipping image display");
             }
 
             StatusMessage = $"{slot.DisplayName} captured successfully! ({EnrolledCount}/{_minimumFingers})";
@@ -645,6 +664,36 @@ public class LiveEnrollmentViewModel : ViewModelBase
         var invalid = Path.GetInvalidFileNameChars();
         var cleaned = new string(value.Select(ch => invalid.Contains(ch) ? '_' : ch).ToArray());
         return cleaned.Replace(' ', '_');
+    }
+
+    private static bool TryDecodeBitmap(byte[] data, out Bitmap? bitmap)
+    {
+        bitmap = null;
+        try
+        {
+            if (!LooksLikeImage(data))
+            {
+                return false;
+            }
+
+            using var stream = new MemoryStream(data);
+            bitmap = new Bitmap(stream);
+            return true;
+        }
+        catch
+        {
+            bitmap = null;
+            return false;
+        }
+    }
+
+    private static bool LooksLikeImage(byte[] data)
+    {
+        if (data == null || data.Length < 4) return false;
+        // JPEG, PNG, BMP magic numbers
+        return (data[0] == 0xFF && data[1] == 0xD8) ||
+               (data[0] == 0x89 && data[1] == 0x50 && data[2] == 0x4E && data[3] == 0x47) ||
+               (data[0] == 0x42 && data[1] == 0x4D);
     }
 }
 

@@ -150,50 +150,61 @@ public sealed class LoginViewModel : ViewModelBase
         var username = Username.Trim();
         var password = Password;
 
-        var lockoutUntil = await _services.LoginAttempts.GetActiveLockoutAsync(username);
-        if (lockoutUntil.HasValue)
+        try
         {
-            var localTime = lockoutUntil.Value.ToLocalTime();
-            StatusMessage = $"Account locked until {localTime:HH:mm}.";
-            await _services.Audit.LogAsync(username, "AdminLogin", username, "Locked", "Lockout active");
-            return;
-        }
-
-        var userType = await _services.Users.GetUserTypeAsync(username, password);
-        if (string.IsNullOrWhiteSpace(userType))
-        {
-            var lockout = await _services.LoginAttempts.RecordFailureAsync(username, "Invalid credentials");
-            if (lockout.HasValue)
+            var lockoutUntil = await _services.LoginAttempts.GetActiveLockoutAsync(username);
+            if (lockoutUntil.HasValue)
             {
-                var localTime = lockout.Value.ToLocalTime();
-                StatusMessage = $"Too many attempts. Locked until {localTime:HH:mm}.";
+                var localTime = lockoutUntil.Value.ToLocalTime();
+                StatusMessage = $"Account locked until {localTime:HH:mm}.";
+                await _services.Audit.LogAsync(username, "AdminLogin", username, "Locked", "Lockout active");
+                return;
             }
-            else
+
+            var userType = await _services.Users.GetUserTypeAsync(username, password);
+            if (string.IsNullOrWhiteSpace(userType))
             {
-                StatusMessage = "Invalid username or password.";
+                var lockout = await _services.LoginAttempts.RecordFailureAsync(username, "Invalid credentials");
+                if (lockout.HasValue)
+                {
+                    var localTime = lockout.Value.ToLocalTime();
+                    StatusMessage = $"Too many attempts. Locked until {localTime:HH:mm}.";
+                }
+                else
+                {
+                    StatusMessage = "Invalid username or password.";
+                }
+                await _services.Audit.LogAsync(username, "AdminLogin", username, "Failed", "Invalid credentials");
+                return;
             }
-            await _services.Audit.LogAsync(username, "AdminLogin", username, "Failed", "Invalid credentials");
-            return;
-        }
 
-        if (!string.Equals(userType, "Administrator", StringComparison.OrdinalIgnoreCase))
+            if (!string.Equals(userType, "Administrator", StringComparison.OrdinalIgnoreCase))
+            {
+                await _services.LoginAttempts.RecordFailureAsync(username, "Non-admin login attempt");
+                StatusMessage = "Admin access only.";
+                await _services.Audit.LogAsync(username, "AdminLogin", username, "Denied", "Non-admin user type");
+                return;
+            }
+
+            await _services.LoginAttempts.RecordSuccessAsync(username);
+            await _services.Audit.LogAsync(username, "AdminLogin", username, "Success", "Login successful");
+
+            StatusMessage = string.Empty;
+            _services.AppState.CurrentUserType = userType;
+            _services.AppState.CurrentUsername = username;
+            IsAdminLoginOpen = false;
+            Username = string.Empty;
+            Password = string.Empty;
+            _navigation.NavigateToKey("Admin");
+        }
+        catch (MySqlConnector.MySqlException)
         {
-            await _services.LoginAttempts.RecordFailureAsync(username, "Non-admin login attempt");
-            StatusMessage = "Admin access only.";
-            await _services.Audit.LogAsync(username, "AdminLogin", username, "Denied", "Non-admin user type");
-            return;
+            StatusMessage = "Database unavailable. Please try again later.";
         }
-
-        await _services.LoginAttempts.RecordSuccessAsync(username);
-        await _services.Audit.LogAsync(username, "AdminLogin", username, "Success", "Login successful");
-
-        StatusMessage = string.Empty;
-        _services.AppState.CurrentUserType = userType;
-        _services.AppState.CurrentUsername = username;
-        IsAdminLoginOpen = false;
-        Username = string.Empty;
-        Password = string.Empty;
-        _navigation.NavigateToKey("Admin");
+        catch (Exception ex)
+        {
+            StatusMessage = $"Login failed: {ex.Message}";
+        }
     }
 
     private async Task RefreshMonitorAsync()
