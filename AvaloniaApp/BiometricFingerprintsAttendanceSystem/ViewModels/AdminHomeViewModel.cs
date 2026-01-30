@@ -72,7 +72,7 @@ public sealed class AdminHomeViewModel : ViewModelBase
     {
         try
         {
-            var students = await _services.Students.GetAllMatricNosAsync();
+            var students = await _services.Students.GetAllRegNosAsync();
             TotalStudents = students.Count.ToString();
         }
         catch

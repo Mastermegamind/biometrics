@@ -2,7 +2,19 @@ namespace BiometricFingerprintsAttendanceSystem.Models;
 
 public sealed class AttendanceRecord
 {
-    public string MatricNo { get; set; } = string.Empty;
+    private string _regNo = string.Empty;
+
+    public string RegNo
+    {
+        get => _regNo;
+        set => _regNo = value ?? string.Empty;
+    }
+
+    public string MatricNo
+    {
+        get => RegNo;
+        set => RegNo = value;
+    }
     public string Name { get; set; } = string.Empty;
     public string Date { get; set; } = string.Empty;
     public string Day { get; set; } = string.Empty;

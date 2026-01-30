@@ -19,24 +19,21 @@ public sealed class EnrollmentRepository
         await conn.OpenAsync(cancellationToken);
 
         await using var cmd = conn.CreateCommand();
-        cmd.CommandText = "SELECT matricno, fingerdata1, fingerdata2, fingerdata3, fingerdata4, fingerdata5, fingerdata6, fingerdata7, fingerdata8, fingerdata9, fingerdata10 FROM new_enrollment";
+        cmd.CommandText = "SELECT regno, finger_index, template FROM fingerprint_enrollments";
 
         await using var reader = await cmd.ExecuteReaderAsync(cancellationToken);
         while (await reader.ReadAsync(cancellationToken))
         {
-            var matricNo = reader.GetString("matricno");
-            for (var i = 1; i <= 10; i++)
+            var regNo = reader.GetString("regno");
+            var fingerIndex = reader.GetInt32("finger_index");
+            if (reader["template"] is byte[] bytes && bytes.Length > 0)
             {
-                var column = $"fingerdata{i}";
-                if (reader[column] is byte[] bytes && bytes.Length > 0)
+                results.Add(new EnrollmentTemplate
                 {
-                    results.Add(new EnrollmentTemplate
-                    {
-                        MatricNo = matricNo,
-                        FingerIndex = i,
-                        TemplateData = bytes
-                    });
-                }
+                    RegNo = regNo,
+                    FingerIndex = fingerIndex,
+                    TemplateData = bytes
+                });
             }
         }
 
@@ -49,8 +46,8 @@ public sealed class EnrollmentRepository
         await conn.OpenAsync(cancellationToken);
 
         await using var cmd = conn.CreateCommand();
-        cmd.CommandText = "SELECT COUNT(*) FROM new_enrollment WHERE matricno = @matricno";
-        cmd.Parameters.AddWithValue("@matricno", matricNo);
+        cmd.CommandText = "SELECT COUNT(*) FROM fingerprint_enrollments WHERE regno = @regno";
+        cmd.Parameters.AddWithValue("@regno", matricNo);
 
         var result = await cmd.ExecuteScalarAsync(cancellationToken);
         return Convert.ToInt32(result) > 0;
@@ -58,24 +55,23 @@ public sealed class EnrollmentRepository
 
     public async Task UpsertTemplateAsync(string matricNo, int fingerIndex, byte[] templateData, int fingerMask, CancellationToken cancellationToken = default)
     {
-        var exists = await HasEnrollmentAsync(matricNo, cancellationToken);
-
         await using var conn = _factory.Create();
         await conn.OpenAsync(cancellationToken);
         await using var cmd = conn.CreateCommand();
 
-        if (exists)
-        {
-            cmd.CommandText = $"UPDATE new_enrollment SET fingerdata{fingerIndex} = @data, fingermask = @mask WHERE matricno = @matricno";
-        }
-        else
-        {
-            cmd.CommandText = $"INSERT INTO new_enrollment (matricno, fingerdata{fingerIndex}, fingermask) VALUES (@matricno, @data, @mask)";
-        }
+        cmd.CommandText = @"
+            INSERT INTO fingerprint_enrollments (regno, finger_index, finger_name, template, captured_at)
+            VALUES (@regno, @fingerIndex, @fingerName, @data, @capturedAt)
+            ON DUPLICATE KEY UPDATE
+                finger_name = VALUES(finger_name),
+                template = VALUES(template),
+                captured_at = VALUES(captured_at)";
 
-        cmd.Parameters.AddWithValue("@matricno", matricNo);
+        cmd.Parameters.AddWithValue("@regno", matricNo);
+        cmd.Parameters.AddWithValue("@fingerIndex", fingerIndex);
+        cmd.Parameters.AddWithValue("@fingerName", GetFingerName(fingerIndex).ToLowerInvariant().Replace(' ', '-'));
         cmd.Parameters.AddWithValue("@data", templateData);
-        cmd.Parameters.AddWithValue("@mask", fingerMask);
+        cmd.Parameters.AddWithValue("@capturedAt", DateTime.UtcNow);
 
         await cmd.ExecuteNonQueryAsync(cancellationToken);
     }
@@ -86,9 +82,9 @@ public sealed class EnrollmentRepository
         await conn.OpenAsync(cancellationToken);
         await using var cmd = conn.CreateCommand();
 
-        cmd.CommandText = $"UPDATE new_enrollment SET fingerdata{fingerIndex} = NULL, fingermask = @mask WHERE matricno = @matricno";
-        cmd.Parameters.AddWithValue("@matricno", matricNo);
-        cmd.Parameters.AddWithValue("@mask", fingerMask);
+        cmd.CommandText = "DELETE FROM fingerprint_enrollments WHERE regno = @regno AND finger_index = @fingerIndex";
+        cmd.Parameters.AddWithValue("@regno", matricNo);
+        cmd.Parameters.AddWithValue("@fingerIndex", fingerIndex);
 
         await cmd.ExecuteNonQueryAsync(cancellationToken);
     }
@@ -98,10 +94,35 @@ public sealed class EnrollmentRepository
         await using var conn = _factory.Create();
         await conn.OpenAsync(cancellationToken);
         await using var cmd = conn.CreateCommand();
-        cmd.CommandText = "SELECT fingermask FROM new_enrollment WHERE matricno = @matricno";
-        cmd.Parameters.AddWithValue("@matricno", matricNo);
+        cmd.CommandText = "SELECT finger_index FROM fingerprint_enrollments WHERE regno = @regno";
+        cmd.Parameters.AddWithValue("@regno", matricNo);
 
-        var result = await cmd.ExecuteScalarAsync(cancellationToken);
-        return result is null ? null : Convert.ToInt32(result);
+        await using var reader = await cmd.ExecuteReaderAsync(cancellationToken);
+        var mask = 0;
+        while (await reader.ReadAsync(cancellationToken))
+        {
+            var index = reader.GetInt32(0);
+            if (index >= 1 && index <= 10)
+            {
+                mask |= (1 << (index - 1));
+            }
+        }
+
+        return mask;
     }
+
+    private static string GetFingerName(int index) => index switch
+    {
+        1 => "Right Thumb",
+        2 => "Right Index Finger",
+        3 => "Right Middle Finger",
+        4 => "Right Ring Finger",
+        5 => "Right Little Finger",
+        6 => "Left Thumb",
+        7 => "Left Index Finger",
+        8 => "Left Middle Finger",
+        9 => "Left Ring Finger",
+        10 => "Left Little Finger",
+        _ => $"Finger {index}"
+    };
 }

@@ -874,10 +874,10 @@ public sealed class LinuxLibfprintService : FingerprintServiceBase
                         {
                             if (matricNoMap.TryGetValue(matchedPrintPtr, out var matricNo))
                             {
-                                _logger?.LogInformation("Identified: {MatricNo}", matricNo);
+                                _logger?.LogInformation("Identified: {RegNo}", matricNo);
                                 return new FingerprintMatchResult
                                 {
-                                    MatricNo = matricNo,
+                                    RegNo = matricNo,
                                     FalseAcceptRate = 1 // Low FAR for identified match
                                 };
                             }
@@ -920,10 +920,10 @@ public sealed class LinuxLibfprintService : FingerprintServiceBase
             var result = await VerifyAsync(sample, template, cancellationToken);
             if (result.IsMatch)
             {
-                _logger?.LogInformation("Sequential verify match found: {MatricNo}", matricNo);
+                _logger?.LogInformation("Sequential verify match found: {RegNo}", matricNo);
                 return new FingerprintMatchResult
                 {
-                    MatricNo = matricNo,
+                    RegNo = matricNo,
                     FalseAcceptRate = (int)(result.FalseAcceptRate * 1000000)
                 };
             }

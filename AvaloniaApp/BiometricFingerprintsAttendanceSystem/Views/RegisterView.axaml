@@ -20,9 +20,9 @@
 
           <!-- Row 0 -->
           <StackPanel Grid.Row="0" Grid.Column="0" Spacing="4" Margin="0,0,8,16">
-            <TextBlock Text="MATRIC NUMBER" Classes="FieldLabel" />
-            <TextBox Classes="GlassInput" Watermark="e.g. MAT/2024/001"
-                     Text="{Binding MatricNo, Mode=TwoWay}" />
+            <TextBlock Text="REGISTRATION NUMBER" Classes="FieldLabel" />
+            <TextBox Classes="GlassInput" Watermark="e.g. MDA/2025/2026/0001"
+                     Text="{Binding RegNo, Mode=TwoWay}" />
           </StackPanel>
 
           <StackPanel Grid.Row="0" Grid.Column="1" Spacing="4" Margin="8,0,0,16">

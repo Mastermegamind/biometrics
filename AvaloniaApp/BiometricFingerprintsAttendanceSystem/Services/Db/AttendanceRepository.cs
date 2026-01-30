@@ -18,8 +18,8 @@ public sealed class AttendanceRepository
         await conn.OpenAsync(cancellationToken);
 
         await using var cmd = conn.CreateCommand();
-        cmd.CommandText = "SELECT 1 FROM attendance WHERE matricno = @matricno AND date = @date LIMIT 1";
-        cmd.Parameters.AddWithValue("@matricno", matricNo);
+        cmd.CommandText = "SELECT 1 FROM attendance WHERE regno = @regno AND date = @date LIMIT 1";
+        cmd.Parameters.AddWithValue("@regno", matricNo);
         cmd.Parameters.AddWithValue("@date", date);
 
         var result = await cmd.ExecuteScalarAsync(cancellationToken);
@@ -32,9 +32,9 @@ public sealed class AttendanceRepository
         await conn.OpenAsync(cancellationToken);
 
         await using var cmd = conn.CreateCommand();
-        cmd.CommandText = @"INSERT INTO attendance (matricno, name, date, day, timein)
-                            VALUES (@matricno, @name, @date, @day, @timein)";
-        cmd.Parameters.AddWithValue("@matricno", matricNo);
+        cmd.CommandText = @"INSERT INTO attendance (regno, name, date, day, timein)
+                            VALUES (@regno, @name, @date, @day, @timein)";
+        cmd.Parameters.AddWithValue("@regno", matricNo);
         cmd.Parameters.AddWithValue("@name", name);
         cmd.Parameters.AddWithValue("@date", date);
         cmd.Parameters.AddWithValue("@day", day);
@@ -49,8 +49,8 @@ public sealed class AttendanceRepository
         await conn.OpenAsync(cancellationToken);
 
         await using var cmd = conn.CreateCommand();
-        cmd.CommandText = "SELECT timeout FROM attendance WHERE matricno = @matricno AND date = @date";
-        cmd.Parameters.AddWithValue("@matricno", matricNo);
+        cmd.CommandText = "SELECT timeout FROM attendance WHERE regno = @regno AND date = @date";
+        cmd.Parameters.AddWithValue("@regno", matricNo);
         cmd.Parameters.AddWithValue("@date", date);
 
         var result = await cmd.ExecuteScalarAsync(cancellationToken);
@@ -63,9 +63,9 @@ public sealed class AttendanceRepository
         await conn.OpenAsync(cancellationToken);
 
         await using var cmd = conn.CreateCommand();
-        cmd.CommandText = "UPDATE attendance SET timeout = @timeout WHERE matricno = @matricno";
+        cmd.CommandText = "UPDATE attendance SET timeout = @timeout WHERE regno = @regno";
         cmd.Parameters.AddWithValue("@timeout", timeOut);
-        cmd.Parameters.AddWithValue("@matricno", matricNo);
+        cmd.Parameters.AddWithValue("@regno", matricNo);
 
         await cmd.ExecuteNonQueryAsync(cancellationToken);
     }
@@ -77,7 +77,7 @@ public sealed class AttendanceRepository
         await conn.OpenAsync(cancellationToken);
 
         await using var cmd = conn.CreateCommand();
-        cmd.CommandText = @"SELECT matricno, name, date, day, timein, timeout
+        cmd.CommandText = @"SELECT regno, name, date, day, timein, timeout
                             FROM attendance WHERE date BETWEEN @from AND @to";
         cmd.Parameters.AddWithValue("@from", fromDate);
         cmd.Parameters.AddWithValue("@to", toDate);
@@ -87,7 +87,7 @@ public sealed class AttendanceRepository
         {
             results.Add(new AttendanceRecord
             {
-                MatricNo = reader.GetString("matricno"),
+                RegNo = reader.GetString("regno"),
                 Name = reader.GetString("name"),
                 Date = reader.GetString("date"),
                 Day = reader.GetString("day"),

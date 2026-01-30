@@ -13,6 +13,9 @@ public record StudentInfo
     public byte[]? PassportPhoto { get; init; }
     public string? PassportUrl { get; init; }
     public DateTime? RenewalDate { get; init; }
+    public bool? IsEnrolled { get; init; }
+    public int? EnrolledFingerCount { get; init; }
+    public DateTime? EnrolledAt { get; init; }
 }
 
 /// <summary>

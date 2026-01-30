@@ -256,7 +256,7 @@ public sealed class DigitalPersonaFingerprintService : FingerprintServiceBase
                 {
                     return Task.FromResult<FingerprintMatchResult?>(new FingerprintMatchResult
                     {
-                        MatricNo = matricNo,
+                        RegNo = matricNo,
                         FalseAcceptRate = (int)(result.FARAchieved * 1000000)
                     });
                 }

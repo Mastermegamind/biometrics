@@ -399,19 +399,6 @@ public class LiveEnrollmentViewModel : ViewModelBase
                 TemplateData = templateData
             };
 
-            // Remove existing template for this finger if any
-            var existing = CapturedTemplates.FirstOrDefault(t => t.FingerIndex == slot.Index);
-            if (existing != null)
-            {
-                CapturedTemplates.Remove(existing);
-            }
-
-            CapturedTemplates.Add(template);
-
-            // Update UI
-            slot.IsEnrolled = true;
-            EnrolledCount = CapturedTemplates.Count;
-
             if (captureResult.SampleData is { Length: > 0 })
             {
                 var samplePath = SaveFingerprintSampleBytes(captureResult.SampleData, RegNo, slot.Name);
@@ -438,6 +425,7 @@ public class LiveEnrollmentViewModel : ViewModelBase
                     if (pngPath != null)
                     {
                         _logger.LogInformation("Saved decoded fingerprint preview to {Path}", pngPath);
+                        template = template with { ImagePath = pngPath };
                     }
                 }
                 else
@@ -449,6 +437,19 @@ public class LiveEnrollmentViewModel : ViewModelBase
             {
                 _logger.LogInformation("Fingerprint device did not return preview image; skipping image display");
             }
+
+            // Remove existing template for this finger if any
+            var existing = CapturedTemplates.FirstOrDefault(t => t.FingerIndex == slot.Index);
+            if (existing != null)
+            {
+                CapturedTemplates.Remove(existing);
+            }
+
+            CapturedTemplates.Add(template);
+
+            // Update UI
+            slot.IsEnrolled = true;
+            EnrolledCount = CapturedTemplates.Count;
 
             StatusMessage = $"{slot.DisplayName} captured successfully! ({EnrolledCount}/{_minimumFingers})";
             _logger.LogInformation("Live enrollment capture success for RegNo {RegNo}, Finger {Finger}", RegNo.Trim(), slot.Name);

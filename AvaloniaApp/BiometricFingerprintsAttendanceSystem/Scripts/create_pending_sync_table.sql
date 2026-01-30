@@ -1,5 +1,4 @@
--- Create pending_sync table for offline-first and online-first modes
--- This table stores operations that need to be synced to the API
+-- Create pending_sync and fingerprint_enrollments tables for offline-first mode
 
 CREATE TABLE IF NOT EXISTS pending_sync (
     id BIGINT PRIMARY KEY AUTO_INCREMENT,
@@ -13,27 +12,21 @@ CREATE TABLE IF NOT EXISTS pending_sync (
     INDEX idx_retry_count (retry_count)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- Ensure the new_enrollment table has the required columns for fingerprint storage
--- This table stores fingerprint templates for local verification
-
-ALTER TABLE new_enrollment
-    ADD COLUMN IF NOT EXISTS fingerdata1 LONGBLOB,
-    ADD COLUMN IF NOT EXISTS fingerdata2 LONGBLOB,
-    ADD COLUMN IF NOT EXISTS fingerdata3 LONGBLOB,
-    ADD COLUMN IF NOT EXISTS fingerdata4 LONGBLOB,
-    ADD COLUMN IF NOT EXISTS fingerdata5 LONGBLOB,
-    ADD COLUMN IF NOT EXISTS fingerdata6 LONGBLOB,
-    ADD COLUMN IF NOT EXISTS fingerdata7 LONGBLOB,
-    ADD COLUMN IF NOT EXISTS fingerdata8 LONGBLOB,
-    ADD COLUMN IF NOT EXISTS fingerdata9 LONGBLOB,
-    ADD COLUMN IF NOT EXISTS fingerdata10 LONGBLOB,
-    ADD COLUMN IF NOT EXISTS fingermask VARCHAR(10) DEFAULT '0000000000';
-
--- Create index on matricno for faster lookups
-CREATE INDEX IF NOT EXISTS idx_enrollment_matricno ON new_enrollment(matricno);
+CREATE TABLE IF NOT EXISTS fingerprint_enrollments (
+    id BIGINT UNSIGNED PRIMARY KEY AUTO_INCREMENT,
+    regno VARCHAR(64) NOT NULL,
+    finger_index TINYINT NOT NULL,
+    finger_name VARCHAR(32) NOT NULL,
+    template LONGBLOB NOT NULL,
+    template_data LONGTEXT NULL,
+    image_preview VARCHAR(255) NULL,
+    captured_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY uq_regno_finger (regno, finger_index),
+    INDEX idx_fingerprint_regno (regno)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- Ensure attendance table has proper structure
 ALTER TABLE attendance
     ADD COLUMN IF NOT EXISTS is_synced TINYINT(1) DEFAULT 0,
-    ADD INDEX IF NOT EXISTS idx_attendance_matricno (matricno),
+    ADD INDEX IF NOT EXISTS idx_attendance_regno (regno),
     ADD INDEX IF NOT EXISTS idx_attendance_date (date);

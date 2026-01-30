@@ -6,7 +6,7 @@ namespace BiometricFingerprintsAttendanceSystem.ViewModels;
 public sealed class RegisterViewModel : ViewModelBase
 {
     private readonly IServiceRegistry _services;
-    private string _matricNo = string.Empty;
+    private string _regNo = string.Empty;
     private string _name = string.Empty;
     private string _faculty = string.Empty;
     private string _department = string.Empty;
@@ -22,12 +22,12 @@ public sealed class RegisterViewModel : ViewModelBase
         SubmitCommand = new AsyncRelayCommand(SubmitAsync, CanSubmit);
     }
 
-    public string MatricNo
+    public string RegNo
     {
-        get => _matricNo;
+        get => _regNo;
         set
         {
-            if (SetField(ref _matricNo, value))
+            if (SetField(ref _regNo, value))
             {
                 SubmitCommand.RaiseCanExecuteChanged();
             }
@@ -104,7 +104,7 @@ public sealed class RegisterViewModel : ViewModelBase
 
     private bool CanSubmit()
     {
-        return !string.IsNullOrWhiteSpace(MatricNo)
+        return !string.IsNullOrWhiteSpace(RegNo)
             && !string.IsNullOrWhiteSpace(Name)
             && !string.IsNullOrWhiteSpace(Department)
             && PassportImage is not null;
@@ -113,7 +113,7 @@ public sealed class RegisterViewModel : ViewModelBase
     private async Task SubmitAsync()
     {
         StatusMessage = "Saving student...";
-        var exists = await _services.Students.StudentExistsAsync(Name, MatricNo, Department);
+        var exists = await _services.Students.StudentExistsAsync(Name, RegNo, Department);
         if (exists)
         {
             StatusMessage = "Duplicate record detected.";
@@ -122,7 +122,7 @@ public sealed class RegisterViewModel : ViewModelBase
 
         var student = new Student
         {
-            MatricNo = MatricNo.Trim(),
+            RegNo = RegNo.Trim(),
             Name = Name.Trim(),
             Faculty = Faculty.Trim(),
             Department = Department.Trim(),

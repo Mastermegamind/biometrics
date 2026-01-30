@@ -68,6 +68,10 @@ public class DataService : IDataService
         if (result.Success && result.Data is not null)
         {
             _cache.Set(cacheKey, result.Data, TimeSpan.FromMinutes(5));
+            if (Mode != SyncMode.OfflineOnly)
+            {
+                await _offline.UpsertStudentSnapshotAsync(result.Data, null);
+            }
         }
         return result;
     }
@@ -114,6 +118,10 @@ public class DataService : IDataService
         if (result.Success && result.Data is not null)
         {
             _cache.Set(cacheKey, result.Data, TimeSpan.FromMinutes(2));
+            if (Mode != SyncMode.OfflineOnly)
+            {
+                await _offline.UpdateEnrollmentStatusAsync(regNo, result.Data);
+            }
         }
         return result;
     }
@@ -247,6 +255,10 @@ public class DataService : IDataService
         if (result.Success)
         {
             _isOnline = true;
+            if (result.Data is not null)
+            {
+                await _offline.UpsertStudentSnapshotAsync(result.Data, null);
+            }
             return result;
         }
 
@@ -269,6 +281,10 @@ public class DataService : IDataService
         if (result.Success)
         {
             _isOnline = true;
+            if (result.Data is not null)
+            {
+                await _offline.UpdateEnrollmentStatusAsync(regNo, result.Data);
+            }
             return result;
         }
 
@@ -280,9 +296,25 @@ public class DataService : IDataService
     {
         // Try online first
         var onlineResult = await _online.SubmitEnrollmentAsync(request);
+        if (onlineResult.Success)
+        {
+            _logger.LogInformation("Enrollment sent to API for {RegNo}", request.RegNo);
+        }
+        else
+        {
+            _logger.LogWarning("Enrollment API submit failed for {RegNo}: {Message}", request.RegNo, onlineResult.Message);
+        }
 
         // Always save locally too (for offline matching)
         var localResult = await _offline.SubmitEnrollmentAsync(request);
+        if (localResult.Success)
+        {
+            _logger.LogInformation("Enrollment saved locally for {RegNo}", request.RegNo);
+        }
+        else
+        {
+            _logger.LogWarning("Enrollment local save failed for {RegNo}: {Message}", request.RegNo, localResult.Message);
+        }
 
         if (onlineResult.Success)
         {
@@ -379,7 +411,12 @@ public class DataService : IDataService
         if (result.Success) return result;
 
         // Try online if not found locally
-        return await _online.GetStudentAsync(regNo);
+        var onlineResult = await _online.GetStudentAsync(regNo);
+        if (onlineResult.Success && onlineResult.Data is not null)
+        {
+            await _offline.UpsertStudentSnapshotAsync(onlineResult.Data, null);
+        }
+        return onlineResult;
     }
 
     private async Task<DataResult<byte[]>> OfflineFirstGetPhotoAsync(string regNo)
@@ -393,7 +430,15 @@ public class DataService : IDataService
     private async Task<DataResult<EnrollmentStatus>> OfflineFirstGetEnrollmentStatusAsync(string regNo)
     {
         // Always check local first for offline-first
-        return await _offline.GetEnrollmentStatusAsync(regNo);
+        var local = await _offline.GetEnrollmentStatusAsync(regNo);
+        if (local.Success) return local;
+
+        var online = await _online.GetEnrollmentStatusAsync(regNo);
+        if (online.Success && online.Data is not null)
+        {
+            await _offline.UpdateEnrollmentStatusAsync(regNo, online.Data);
+        }
+        return online;
     }
 
     private async Task<DataResult> OfflineFirstSubmitEnrollmentAsync(EnrollmentRequest request)
@@ -404,6 +449,7 @@ public class DataService : IDataService
         {
             return localResult;
         }
+        _logger.LogInformation("Enrollment saved locally for {RegNo}", request.RegNo);
 
         // Queue for API sync
         var json = JsonSerializer.Serialize(request, _jsonOptions);
@@ -416,6 +462,7 @@ public class DataService : IDataService
             var onlineResult = await _online.SubmitEnrollmentAsync(request);
             if (onlineResult.Success)
             {
+                _logger.LogInformation("Enrollment sent to API for {RegNo}", request.RegNo);
                 // Remove from sync queue (it's the most recent one)
                 var pending = await _offline.GetPendingSyncRecordsAsync();
                 var last = pending.LastOrDefault(p => p.OperationType == "Enrollment");
@@ -424,6 +471,10 @@ public class DataService : IDataService
                     await _offline.MarkSyncedAsync(last.Id);
                     _pendingSyncCount--;
                 }
+            }
+            else
+            {
+                _logger.LogWarning("Enrollment API submit failed for {RegNo}: {Message}", request.RegNo, onlineResult.Message);
             }
         }
 

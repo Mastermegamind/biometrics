@@ -15,6 +15,7 @@ public class OfflineDataProvider
     private readonly IFingerprintService _fingerprint;
     private readonly ILogger<OfflineDataProvider> _logger;
     private readonly IMemoryCache _cache;
+    private readonly HttpClient _http = new();
     private const string EnrollmentCacheKey = "offline_enrollments_cache";
 
     public OfflineDataProvider(
@@ -39,9 +40,10 @@ public class OfflineDataProvider
             await using var conn = await _db.CreateConnectionAsync();
             await using var cmd = conn.CreateCommand();
             cmd.CommandText = @"
-                SELECT matricno, name, faculty, department, passport
+                SELECT regno, name, class_name, faculty, department, passport_filename, passport_url, renewal_date,
+                       is_enrolled, fingers_enrolled, enrolled_at
                 FROM students
-                WHERE matricno = @regNo";
+                WHERE regno = @regNo OR matricno = @regNo";
             cmd.Parameters.AddWithValue("@regNo", regNo);
 
             await using var reader = await cmd.ExecuteReaderAsync();
@@ -54,9 +56,15 @@ public class OfflineDataProvider
             {
                 RegNo = reader.GetString(0),
                 Name = reader.GetString(1),
-                Faculty = reader.IsDBNull(2) ? null : reader.GetString(2),
-                Department = reader.IsDBNull(3) ? null : reader.GetString(3),
-                PassportPhoto = reader.IsDBNull(4) ? null : (byte[])reader["passport"]
+                ClassName = reader.IsDBNull(2) ? string.Empty : reader.GetString(2),
+                Faculty = reader.IsDBNull(3) ? null : reader.GetString(3),
+                Department = reader.IsDBNull(4) ? null : reader.GetString(4),
+                PassportPhoto = TryLoadPassportFromDisk(reader.IsDBNull(5) ? null : reader.GetString(5)),
+                PassportUrl = reader.IsDBNull(6) ? null : reader.GetString(6),
+                RenewalDate = reader.IsDBNull(7) ? null : reader.GetDateTime(7),
+                IsEnrolled = reader.IsDBNull(8) ? null : reader.GetBoolean(8),
+                EnrolledFingerCount = reader.IsDBNull(9) ? null : reader.GetInt32(9),
+                EnrolledAt = reader.IsDBNull(10) ? null : reader.GetDateTime(10)
             };
 
             return DataResult<StudentInfo>.Ok(student);
@@ -77,7 +85,7 @@ public class OfflineDataProvider
         {
             await using var conn = await _db.CreateConnectionAsync();
             await using var cmd = conn.CreateCommand();
-            cmd.CommandText = "SELECT passport FROM students WHERE matricno = @regNo";
+            cmd.CommandText = "SELECT passport_filename FROM students WHERE regno = @regNo OR matricno = @regNo";
             cmd.Parameters.AddWithValue("@regNo", regNo);
 
             var result = await cmd.ExecuteScalarAsync();
@@ -86,7 +94,14 @@ public class OfflineDataProvider
                 return DataResult<byte[]>.Fail("Photo not found");
             }
 
-            return DataResult<byte[]>.Ok((byte[])result);
+            var filename = result.ToString();
+            var bytes = TryLoadPassportFromDisk(filename);
+            if (bytes == null || bytes.Length == 0)
+            {
+                return DataResult<byte[]>.Fail("Photo file not found");
+            }
+
+            return DataResult<byte[]>.Ok(bytes);
         }
         catch (Exception ex)
         {
@@ -105,9 +120,9 @@ public class OfflineDataProvider
             await using var conn = await _db.CreateConnectionAsync();
             await using var cmd = conn.CreateCommand();
             cmd.CommandText = @"
-                SELECT fingermask, created_at
-                FROM new_enrollment
-                WHERE matricno = @regNo";
+                SELECT COUNT(*), MIN(captured_at)
+                FROM fingerprint_enrollments
+                WHERE regNo = @regNo";
             cmd.Parameters.AddWithValue("@regNo", regNo);
 
             await using var reader = await cmd.ExecuteReaderAsync();
@@ -116,11 +131,8 @@ public class OfflineDataProvider
                 return DataResult<EnrollmentStatus>.Ok(new EnrollmentStatus { IsEnrolled = false });
             }
 
-            var fingermask = reader.IsDBNull(0) ? "" : reader.GetString(0);
+            var fingerCount = reader.IsDBNull(0) ? 0 : reader.GetInt32(0);
             var createdAt = reader.IsDBNull(1) ? (DateTime?)null : reader.GetDateTime(1);
-
-            // Count enrolled fingers from fingermask
-            var fingerCount = string.IsNullOrEmpty(fingermask) ? 0 : fingermask.Count(c => c == '1');
 
             return DataResult<EnrollmentStatus>.Ok(new EnrollmentStatus
             {
@@ -145,70 +157,45 @@ public class OfflineDataProvider
         {
             await using var conn = await _db.CreateConnectionAsync();
 
-            // Check if already enrolled
-            await using var checkCmd = conn.CreateCommand();
-            checkCmd.CommandText = "SELECT matricno FROM new_enrollment WHERE matricno = @regNo";
-            checkCmd.Parameters.AddWithValue("@regNo", request.RegNo);
-            var existingId = await checkCmd.ExecuteScalarAsync();
-
-            // Build fingermask (1 = enrolled, 0 = not enrolled)
-            var fingermask = new char[10];
-            Array.Fill(fingermask, '0');
+            var enrolledCount = 0;
             foreach (var template in request.Templates)
             {
-                if (template.FingerIndex >= 1 && template.FingerIndex <= 10)
+                if (template.FingerIndex < 1 || template.FingerIndex > 10)
                 {
-                    fingermask[template.FingerIndex - 1] = '1';
+                    continue;
                 }
+
+                await using var upsertCmd = conn.CreateCommand();
+                upsertCmd.CommandText = @"
+                    INSERT INTO fingerprint_enrollments
+                        (regno, finger_index, finger_name, template, template_data, image_preview, captured_at)
+                    VALUES
+                        (@regNo, @fingerIndex, @fingerName, @template, @templateData, @imagePreview, @capturedAt)
+                    ON DUPLICATE KEY UPDATE
+                        finger_name = VALUES(finger_name),
+                        template = VALUES(template),
+                        template_data = VALUES(template_data),
+                        image_preview = VALUES(image_preview),
+                        captured_at = VALUES(captured_at)";
+
+                upsertCmd.Parameters.AddWithValue("@regNo", request.RegNo);
+                upsertCmd.Parameters.AddWithValue("@fingerIndex", template.FingerIndex);
+                upsertCmd.Parameters.AddWithValue("@fingerName", NormalizeFingerName(template.Finger, template.FingerIndex));
+                upsertCmd.Parameters.AddWithValue("@template", template.TemplateData);
+                upsertCmd.Parameters.AddWithValue("@templateData", Convert.ToBase64String(template.TemplateData));
+                upsertCmd.Parameters.AddWithValue("@imagePreview", (object?)SaveFingerprintPreviewToDisk(request.RegNo, template.ImagePath) ?? DBNull.Value);
+                upsertCmd.Parameters.AddWithValue("@capturedAt", request.EnrolledAt);
+
+                await upsertCmd.ExecuteNonQueryAsync();
+                enrolledCount++;
             }
 
-            if (existingId != null)
+            await UpdateEnrollmentStatusAsync(request.RegNo, new EnrollmentStatus
             {
-                // Update existing enrollment
-                await using var updateCmd = conn.CreateCommand();
-                var sql = new System.Text.StringBuilder("UPDATE new_enrollment SET fingermask = @fingermask");
-
-                foreach (var template in request.Templates)
-                {
-                    sql.Append($", fingerdata{template.FingerIndex} = @finger{template.FingerIndex}");
-                }
-                sql.Append(" WHERE matricno = @regNo");
-
-                updateCmd.CommandText = sql.ToString();
-                updateCmd.Parameters.AddWithValue("@fingermask", new string(fingermask));
-                updateCmd.Parameters.AddWithValue("@regNo", request.RegNo);
-
-                foreach (var template in request.Templates)
-                {
-                    updateCmd.Parameters.AddWithValue($"@finger{template.FingerIndex}", template.TemplateData);
-                }
-
-                await updateCmd.ExecuteNonQueryAsync();
-            }
-            else
-            {
-                // Insert new enrollment
-                await using var insertCmd = conn.CreateCommand();
-                var columns = new List<string> { "matricno", "fingermask" };
-                var values = new List<string> { "@regNo", "@fingermask" };
-
-                foreach (var template in request.Templates)
-                {
-                    columns.Add($"fingerdata{template.FingerIndex}");
-                    values.Add($"@finger{template.FingerIndex}");
-                }
-
-                insertCmd.CommandText = $"INSERT INTO new_enrollment ({string.Join(", ", columns)}) VALUES ({string.Join(", ", values)})";
-                insertCmd.Parameters.AddWithValue("@regNo", request.RegNo);
-                insertCmd.Parameters.AddWithValue("@fingermask", new string(fingermask));
-
-                foreach (var template in request.Templates)
-                {
-                    insertCmd.Parameters.AddWithValue($"@finger{template.FingerIndex}", template.TemplateData);
-                }
-
-                await insertCmd.ExecuteNonQueryAsync();
-            }
+                IsEnrolled = enrolledCount >= 2,
+                EnrolledFingerCount = enrolledCount,
+                EnrolledAt = request.EnrolledAt
+            });
 
             _cache.Remove(EnrollmentCacheKey);
             _logger.LogInformation("Enrollment saved locally for {RegNo}", request.RegNo);
@@ -237,10 +224,9 @@ public class OfflineDataProvider
             await using var conn = await _db.CreateConnectionAsync();
             await using var cmd = conn.CreateCommand();
             cmd.CommandText = @"
-                SELECT matricno, fingermask,
-                       fingerdata1, fingerdata2, fingerdata3, fingerdata4, fingerdata5,
-                       fingerdata6, fingerdata7, fingerdata8, fingerdata9, fingerdata10
-                FROM new_enrollment";
+                SELECT regno, finger_index, finger_name, template
+                FROM fingerprint_enrollments
+                ORDER BY regno, finger_index";
 
             var results = new List<(string RegNo, List<FingerprintTemplate> Templates)>();
 
@@ -248,31 +234,28 @@ public class OfflineDataProvider
             while (await reader.ReadAsync())
             {
                 var regNo = reader.GetString(0) ?? string.Empty;
-                var fingermask = reader.IsDBNull(1) ? "0000000000" : reader.GetString(1);
-                var templates = new List<FingerprintTemplate>();
+                var fingerIndex = reader.GetInt32(1);
+                var fingerName = reader.IsDBNull(2) ? GetFingerName(fingerIndex) : reader.GetString(2);
+                var data = reader.IsDBNull(3) ? null : (byte[])reader[3];
 
-                for (int i = 0; i < 10; i++)
+                if (string.IsNullOrWhiteSpace(regNo) || data == null || data.Length == 0)
                 {
-                    if (fingermask.Length > i && fingermask[i] == '1')
-                    {
-                        var colIndex = 2 + i; // fingerdata1 is at index 2
-                        if (!reader.IsDBNull(colIndex))
-                        {
-                            var data = (byte[])reader[colIndex];
-                            templates.Add(new FingerprintTemplate
-                            {
-                                FingerIndex = i + 1,
-                                Finger = GetFingerName(i + 1),
-                                TemplateData = data
-                            });
-                        }
-                    }
+                    continue;
                 }
 
-                if (templates.Count > 0 && !string.IsNullOrWhiteSpace(regNo))
+                var existing = results.FirstOrDefault(r => r.RegNo == regNo);
+                if (existing.RegNo == null)
                 {
-                    results.Add((regNo, templates));
+                    existing = (regNo, new List<FingerprintTemplate>());
+                    results.Add(existing);
                 }
+
+                existing.Templates.Add(new FingerprintTemplate
+                {
+                    FingerIndex = fingerIndex,
+                    Finger = fingerName,
+                    TemplateData = data
+                });
             }
 
             _cache.Set(EnrollmentCacheKey, results, TimeSpan.FromMinutes(2));
@@ -330,7 +313,7 @@ public class OfflineDataProvider
             await using var checkCmd = conn.CreateCommand();
             checkCmd.CommandText = @"
                 SELECT id FROM attendance
-                WHERE matricno = @regNo AND date = @date AND timeout IS NULL";
+                WHERE regno = @regNo AND date = @date AND timeout IS NULL";
             checkCmd.Parameters.AddWithValue("@regNo", matchedRegNo);
             checkCmd.Parameters.AddWithValue("@date", today.ToString("yyyy-MM-dd"));
 
@@ -350,7 +333,7 @@ public class OfflineDataProvider
             var now = DateTime.Now;
             await using var insertCmd = conn.CreateCommand();
             insertCmd.CommandText = @"
-                INSERT INTO attendance (matricno, name, date, day, timein)
+                INSERT INTO attendance (regno, name, date, day, timein)
                 VALUES (@regNo, @name, @date, @day, @timein)";
             insertCmd.Parameters.AddWithValue("@regNo", matchedRegNo);
             insertCmd.Parameters.AddWithValue("@name", student.Name);
@@ -422,7 +405,7 @@ public class OfflineDataProvider
             await using var findCmd = conn.CreateCommand();
             findCmd.CommandText = @"
                 SELECT id, timein FROM attendance
-                WHERE matricno = @regNo AND date = @date AND timeout IS NULL
+                WHERE regno = @regNo AND date = @date AND timeout IS NULL
                 ORDER BY id DESC LIMIT 1";
             findCmd.Parameters.AddWithValue("@regNo", matchedRegNo);
             findCmd.Parameters.AddWithValue("@date", today.ToString("yyyy-MM-dd"));
@@ -486,13 +469,13 @@ public class OfflineDataProvider
             await using var cmd = conn.CreateCommand();
 
             var sql = @"
-                SELECT id, matricno, name, date, timein, timeout
+                SELECT id, regno, name, date, timein, timeout
                 FROM attendance
                 WHERE date BETWEEN @from AND @to";
 
             if (!string.IsNullOrEmpty(regNo))
             {
-                sql += " AND matricno = @regNo";
+                sql += " AND regno = @regNo";
             }
             sql += " ORDER BY date DESC, timein DESC";
 
@@ -665,4 +648,229 @@ public class OfflineDataProvider
         10 => "LeftLittle",
         _ => $"Finger{index}"
     };
+
+    private static string NormalizeFingerName(string? finger, int fingerIndex)
+    {
+        if (!string.IsNullOrWhiteSpace(finger))
+        {
+            var compact = finger.Replace(" ", "", StringComparison.OrdinalIgnoreCase);
+            var pos = compact switch
+            {
+                "RightThumb" => FingerPosition.RightThumb,
+                "RightIndex" or "RightIndexFinger" => FingerPosition.RightIndexFinger,
+                "RightMiddle" or "RightMiddleFinger" => FingerPosition.RightMiddleFinger,
+                "RightRing" or "RightRingFinger" => FingerPosition.RightRingFinger,
+                "RightLittle" or "RightLittleFinger" => FingerPosition.RightLittleFinger,
+                "LeftThumb" => FingerPosition.LeftThumb,
+                "LeftIndex" or "LeftIndexFinger" => FingerPosition.LeftIndexFinger,
+                "LeftMiddle" or "LeftMiddleFinger" => FingerPosition.LeftMiddleFinger,
+                "LeftRing" or "LeftRingFinger" => FingerPosition.LeftRingFinger,
+                "LeftLittle" or "LeftLittleFinger" => FingerPosition.LeftLittleFinger,
+                _ => FingerPosition.Unknown
+            };
+
+            if (pos != FingerPosition.Unknown)
+            {
+                return pos.ToFprintdName();
+            }
+
+            if (finger.Contains('-', StringComparison.Ordinal))
+            {
+                return finger.ToLowerInvariant();
+            }
+        }
+
+        if (fingerIndex >= 1 && fingerIndex <= 10)
+        {
+            return ((FingerPosition)fingerIndex).ToFprintdName();
+        }
+
+        return "any";
+    }
+
+    public async Task UpsertStudentSnapshotAsync(StudentInfo student, EnrollmentStatus? status)
+    {
+        try
+        {
+            await using var conn = await _db.CreateConnectionAsync();
+            await using var cmd = conn.CreateCommand();
+            cmd.CommandText = @"
+                INSERT INTO students
+                    (regno, matricno, name, class_name, faculty, department, passport_filename, passport_url, renewal_date,
+                     is_enrolled, fingers_enrolled, enrolled_at, updated_at)
+                VALUES
+                    (@regno, @matricno, @name, @className, @faculty, @department, @passportFilename, @passportUrl, @renewalDate,
+                     @isEnrolled, @fingersEnrolled, @enrolledAt, CURRENT_TIMESTAMP)
+                ON DUPLICATE KEY UPDATE
+                    name = VALUES(name),
+                    class_name = VALUES(class_name),
+                    faculty = COALESCE(VALUES(faculty), faculty),
+                    department = COALESCE(VALUES(department), department),
+                    passport_filename = COALESCE(VALUES(passport_filename), passport_filename),
+                    passport_url = VALUES(passport_url),
+                    renewal_date = VALUES(renewal_date),
+                    is_enrolled = COALESCE(VALUES(is_enrolled), is_enrolled),
+                    fingers_enrolled = COALESCE(VALUES(fingers_enrolled), fingers_enrolled),
+                    enrolled_at = COALESCE(VALUES(enrolled_at), enrolled_at),
+                    updated_at = CURRENT_TIMESTAMP";
+
+            var passportFilename = await DownloadPassportToDiskAsync(student.RegNo, student.PassportUrl);
+            cmd.Parameters.AddWithValue("@regno", student.RegNo);
+            cmd.Parameters.AddWithValue("@matricno", DBNull.Value);
+            cmd.Parameters.AddWithValue("@name", student.Name);
+            cmd.Parameters.AddWithValue("@className", student.ClassName);
+            cmd.Parameters.AddWithValue("@faculty", (object?)student.Faculty ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("@department", (object?)student.Department ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("@passportFilename", (object?)passportFilename ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("@passportUrl", (object?)student.PassportUrl ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("@renewalDate", student.RenewalDate.HasValue ? student.RenewalDate.Value : DBNull.Value);
+            cmd.Parameters.AddWithValue("@isEnrolled", status?.IsEnrolled);
+            cmd.Parameters.AddWithValue("@fingersEnrolled", status?.EnrolledFingerCount);
+            cmd.Parameters.AddWithValue("@enrolledAt", status?.EnrolledAt.HasValue == true ? status.EnrolledAt.Value : DBNull.Value);
+
+            await cmd.ExecuteNonQueryAsync();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to cache student snapshot for {RegNo}", student.RegNo);
+        }
+    }
+
+    public async Task UpdateEnrollmentStatusAsync(string regNo, EnrollmentStatus status)
+    {
+        try
+        {
+            await using var conn = await _db.CreateConnectionAsync();
+            await using var cmd = conn.CreateCommand();
+            cmd.CommandText = @"
+                UPDATE students
+                SET is_enrolled = @isEnrolled,
+                    fingers_enrolled = @fingersEnrolled,
+                    enrolled_at = @enrolledAt,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE regno = @regno OR matricno = @regno";
+            cmd.Parameters.AddWithValue("@regno", regNo);
+            cmd.Parameters.AddWithValue("@isEnrolled", status.IsEnrolled);
+            cmd.Parameters.AddWithValue("@fingersEnrolled", status.EnrolledFingerCount);
+            cmd.Parameters.AddWithValue("@enrolledAt", status.EnrolledAt.HasValue ? status.EnrolledAt.Value : DBNull.Value);
+
+            await cmd.ExecuteNonQueryAsync();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to update enrollment status for {RegNo}", regNo);
+        }
+    }
+
+    private static string GetPassportStorageDir()
+    {
+        var baseDir = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+        var dir = Path.Combine(baseDir, "MdaBiometrics", "passports");
+        Directory.CreateDirectory(dir);
+        return dir;
+    }
+
+    private async Task<string?> DownloadPassportToDiskAsync(string regNo, string? url)
+    {
+        if (string.IsNullOrWhiteSpace(url))
+        {
+            return null;
+        }
+
+        try
+        {
+            var fileName = BuildPassportFileName(regNo, url);
+            if (string.IsNullOrWhiteSpace(fileName))
+            {
+                return null;
+            }
+            var dir = GetPassportStorageDir();
+            var path = Path.Combine(dir, fileName);
+
+            if (File.Exists(path))
+            {
+                return fileName;
+            }
+
+            var bytes = await _http.GetByteArrayAsync(url);
+            if (bytes.Length == 0)
+            {
+                return null;
+            }
+
+            await File.WriteAllBytesAsync(path, bytes);
+            return fileName;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to download passport for {RegNo}", regNo);
+            return null;
+        }
+    }
+
+    private static string? BuildPassportFileName(string regNo, string url)
+    {
+        try
+        {
+            var uri = new Uri(url);
+            var name = Path.GetFileName(uri.LocalPath);
+            if (!string.IsNullOrWhiteSpace(name))
+            {
+                return SanitizeFileName($"{SanitizeFileName(regNo)}_{name}");
+            }
+        }
+        catch
+        {
+            // Ignore URL parsing errors
+        }
+
+        return $"passport_{SanitizeFileName(regNo)}_{DateTime.UtcNow:yyyyMMddHHmmss}.jpg";
+    }
+
+    private static byte[]? TryLoadPassportFromDisk(string? fileName)
+    {
+        if (string.IsNullOrWhiteSpace(fileName))
+        {
+            return null;
+        }
+
+        var path = Path.Combine(GetPassportStorageDir(), fileName);
+        return File.Exists(path) ? File.ReadAllBytes(path) : null;
+    }
+
+    private static string SanitizeFileName(string value)
+    {
+        var invalid = Path.GetInvalidFileNameChars();
+        var cleaned = new string(value.Select(ch => invalid.Contains(ch) ? '_' : ch).ToArray());
+        return cleaned.Replace(' ', '_');
+    }
+
+    private static string GetFingerprintPreviewDir()
+    {
+        var baseDir = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+        var dir = Path.Combine(baseDir, "MdaBiometrics", "fingerprints");
+        Directory.CreateDirectory(dir);
+        return dir;
+    }
+
+    private static string? SaveFingerprintPreviewToDisk(string regNo, string? sourcePath)
+    {
+        if (string.IsNullOrWhiteSpace(sourcePath) || !File.Exists(sourcePath))
+        {
+            return null;
+        }
+
+        try
+        {
+            var fileName = $"fp_{SanitizeFileName(regNo)}_{DateTime.UtcNow:yyyyMMddHHmmssfff}.png";
+            var dir = GetFingerprintPreviewDir();
+            var destPath = Path.Combine(dir, fileName);
+            File.Copy(sourcePath, destPath, overwrite: true);
+            return fileName;
+        }
+        catch
+        {
+            return null;
+        }
+    }
 }
