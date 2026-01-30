@@ -539,13 +539,25 @@ public class OnlineDataProvider
         var normalized = NormalizeApiPath(path);
         var encodedRegNo = Uri.EscapeDataString(regNo);
 
+        // Check if path contains {regNo} placeholder
         if (normalized.Contains("{regNo}", StringComparison.OrdinalIgnoreCase))
         {
+            // If regNo contains slashes, use query parameter instead of path segment
+            // because some servers (Apache) reject encoded slashes in paths
+            if (regNo.Contains('/'))
+            {
+                var pathWithoutPlaceholder = normalized
+                    .Replace("/{regNo}", "", StringComparison.OrdinalIgnoreCase)
+                    .Replace("{regNo}", "", StringComparison.OrdinalIgnoreCase)
+                    .TrimEnd('/');
+                var separator = pathWithoutPlaceholder.Contains('?') ? "&" : "?";
+                return $"{pathWithoutPlaceholder}{separator}regNo={encodedRegNo}";
+            }
             return normalized.Replace("{regNo}", encodedRegNo, StringComparison.OrdinalIgnoreCase);
         }
 
-        var separator = normalized.Contains('?') ? "&" : "?";
-        return $"{normalized}{separator}regNo={encodedRegNo}";
+        var sep = normalized.Contains('?') ? "&" : "?";
+        return $"{normalized}{sep}regNo={encodedRegNo}";
     }
 
     private static string NormalizeApiPath(string path)

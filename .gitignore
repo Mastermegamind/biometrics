@@ -64,3 +64,5 @@ $RECYCLE.BIN/
 
 .fake
 AvaloniaApp/BiometricFingerprintsAttendanceSystem/.env
+AvaloniaApp/BiometricFingerprintsAttendanceSystem/nul
+nul
