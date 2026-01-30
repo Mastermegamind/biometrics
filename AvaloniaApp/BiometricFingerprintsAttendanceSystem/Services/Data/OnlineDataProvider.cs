@@ -680,9 +680,13 @@ public class OnlineDataProvider
         // Check if path contains {regNo} placeholder
         if (normalized.Contains("{regNo}", StringComparison.OrdinalIgnoreCase))
         {
-            // If regNo contains slashes, use query parameter instead of path segment
-            // because some servers (Apache) reject encoded slashes in paths
-            if (regNo.Contains('/'))
+            var placeholderIndex = normalized.IndexOf("{regNo}", StringComparison.OrdinalIgnoreCase);
+            var queryIndex = normalized.IndexOf('?', StringComparison.OrdinalIgnoreCase);
+            var placeholderInQuery = queryIndex >= 0 && queryIndex < placeholderIndex;
+
+            // If regNo contains slashes and the placeholder is in the path segment,
+            // use query parameter instead to avoid encoded slashes in path segments.
+            if (regNo.Contains('/') && !placeholderInQuery)
             {
                 var pathWithoutPlaceholder = normalized
                     .Replace("/{regNo}", "", StringComparison.OrdinalIgnoreCase)
@@ -691,6 +695,7 @@ public class OnlineDataProvider
                 var separator = pathWithoutPlaceholder.Contains('?') ? "&" : "?";
                 return $"{pathWithoutPlaceholder}{separator}regNo={encodedRegNo}";
             }
+
             return normalized.Replace("{regNo}", encodedRegNo, StringComparison.OrdinalIgnoreCase);
         }
 

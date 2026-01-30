@@ -1,0 +1,42 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework Condition="'$(IncludeFingerprintSdks)' != 'true'">net10.0</TargetFramework>
+    <TargetFramework Condition="'$(IncludeFingerprintSdks)' == 'true'">net10.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="MySqlConnector" Version="2.5.0" />
+  </ItemGroup>
+
+  <PropertyGroup Condition="'$(IncludeFingerprintSdks)' == 'true'">
+    <DefineConstants>$(DefineConstants);DIGITALPERSONA_SDK</DefineConstants>
+    <UseWindowsForms>true</UseWindowsForms>
+  </PropertyGroup>
+
+  <ItemGroup Condition="'$(IncludeFingerprintSdks)' == 'true'">
+    <Reference Include="DPFPDevNET">
+      <HintPath>$(DigitalPersonaSdkPath)\DPFPDevNET.dll</HintPath>
+      <Private>true</Private>
+    </Reference>
+    <Reference Include="DPFPEngNET">
+      <HintPath>$(DigitalPersonaSdkPath)\DPFPEngNET.dll</HintPath>
+      <Private>true</Private>
+    </Reference>
+    <Reference Include="DPFPGuiNET">
+      <HintPath>$(DigitalPersonaSdkPath)\DPFPGuiNET.dll</HintPath>
+      <Private>true</Private>
+    </Reference>
+    <Reference Include="DPFPShrNET">
+      <HintPath>$(DigitalPersonaSdkPath)\DPFPShrNET.dll</HintPath>
+      <Private>true</Private>
+    </Reference>
+    <Reference Include="DPFPVerNET">
+      <HintPath>$(DigitalPersonaSdkPath)\DPFPVerNET.dll</HintPath>
+      <Private>true</Private>
+    </Reference>
+  </ItemGroup>
+
+</Project>
