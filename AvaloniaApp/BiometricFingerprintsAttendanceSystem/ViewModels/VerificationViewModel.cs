@@ -106,7 +106,7 @@ public sealed class VerificationViewModel : ViewModelBase
 
     private async Task TimeInAsync()
     {
-        var date = DateTime.Now.ToShortDateString();
+        var date = LagosTime.Now.ToShortDateString();
         var hasTimeIn = await _services.Attendance.HasTimeInAsync(RegNo.Trim(), date);
         if (hasTimeIn)
         {
@@ -114,7 +114,8 @@ public sealed class VerificationViewModel : ViewModelBase
             return;
         }
 
-        await _services.Attendance.InsertTimeInAsync(RegNo.Trim(), Name.Trim(), date, DateTime.Now.DayOfWeek.ToString(), DateTime.Now.ToShortTimeString());
+        await _services.Attendance.InsertTimeInAsync(RegNo.Trim(), Name.Trim(), date, LagosTime.Now.DayOfWeek.ToString(), LagosTime.Now.ToShortTimeString());
         StatusMessage = "Time-in recorded.";
     }
 }
+

@@ -89,7 +89,7 @@ public sealed class DiagnosticsViewModel : ViewModelBase
         await Task.WhenAll(UpdateApiStatusAsync(), UpdateDbStatusAsync());
         UpdateFingerprintStatus();
         UpdateSyncStatus();
-        LastChecked = DateTime.Now.ToString("HH:mm:ss");
+        LastChecked = LagosTime.Now.ToString("HH:mm:ss");
     }
 
     private async Task UpdateApiStatusAsync()
@@ -150,3 +150,4 @@ public sealed class DiagnosticsViewModel : ViewModelBase
         SyncStatus = _syncManager.IsRunning ? "Running" : "Stopped";
     }
 }
+

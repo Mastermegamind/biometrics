@@ -1,6 +1,8 @@
 // Global using directives to resolve type conflicts between Avalonia and Windows Forms
 // when building with DigitalPersona SDK support
 
+global using BiometricFingerprintsAttendanceSystem.Services.Time;
+
 #if DIGITALPERSONA_SDK
 // Explicitly use Avalonia types instead of Windows Forms/System.Drawing equivalents
 global using Application = Avalonia.Application;

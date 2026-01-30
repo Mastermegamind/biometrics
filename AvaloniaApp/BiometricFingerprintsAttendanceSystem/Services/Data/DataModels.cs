@@ -1,3 +1,5 @@
+using BiometricFingerprintsAttendanceSystem.Services.Time;
+
 namespace BiometricFingerprintsAttendanceSystem.Services.Data;
 
 /// <summary>
@@ -38,7 +40,7 @@ public record EnrollmentRequest
     public string Name { get; init; } = string.Empty;
     public string ClassName { get; init; } = string.Empty;
     public List<FingerprintTemplate> Templates { get; init; } = [];
-    public DateTime EnrolledAt { get; init; } = DateTime.UtcNow;
+    public DateTime EnrolledAt { get; init; } = LagosTime.Now;
 }
 
 /// <summary>
@@ -47,7 +49,7 @@ public record EnrollmentRequest
 public record ClockInRequest
 {
     public byte[] FingerprintTemplate { get; init; } = [];
-    public DateTime Timestamp { get; init; } = DateTime.UtcNow;
+    public DateTime Timestamp { get; init; } = LagosTime.Now;
     public string? DeviceId { get; init; }
 }
 
@@ -69,7 +71,7 @@ public record ClockInResponse
 public record ClockOutRequest
 {
     public byte[] FingerprintTemplate { get; init; } = [];
-    public DateTime Timestamp { get; init; } = DateTime.UtcNow;
+    public DateTime Timestamp { get; init; } = LagosTime.Now;
     public string? DeviceId { get; init; }
 }
 

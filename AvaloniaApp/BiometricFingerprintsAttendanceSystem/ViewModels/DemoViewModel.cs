@@ -219,7 +219,7 @@ public sealed class DemoViewModel : ViewModelBase
                     {
                         FingerIndex = 1,
                         TemplateBase64 = string.Empty,
-                        CreatedAt = DateTime.Now
+                        CreatedAt = LagosTime.Now
                     }
                 });
                 SetStatus("Enrollment successful! Finger stored in system (fprintd). Continue until 10 fingers are enrolled.", "success");
@@ -307,7 +307,7 @@ public sealed class DemoViewModel : ViewModelBase
 
     private void Log(string message)
     {
-        var timestamp = DateTime.Now.ToString("HH:mm:ss.fff");
+        var timestamp = LagosTime.Now.ToString("HH:mm:ss.fff");
         var logLine = $"[{timestamp}] {message}";
         Console.WriteLine($"[DEMO] {logLine}");
 
@@ -392,7 +392,7 @@ public sealed class DemoViewModel : ViewModelBase
             // In demo mode, we verify the capture was successful and record clock-in
             // Real verification would compare against stored templates
 
-            var now = DateTime.Now;
+            var now = LagosTime.Now;
             LastClockIn = now.ToString("hh:mm:ss tt");
 
             var record = new DemoAttendanceRecord
@@ -482,7 +482,7 @@ public sealed class DemoViewModel : ViewModelBase
                 }
             }
 
-            var now = DateTime.Now;
+            var now = LagosTime.Now;
             LastClockOut = now.ToString("hh:mm:ss tt");
 
             // Update the latest attendance record
@@ -618,7 +618,7 @@ public sealed class DemoViewModel : ViewModelBase
         }
 
         Directory.CreateDirectory(_fingerprintImageRoot);
-        var fileName = $"{_demoRegNo}_finger{fingerIndex}_{DateTime.Now:yyyyMMdd_HHmmss}.png";
+        var fileName = $"{_demoRegNo}_finger{fingerIndex}_{LagosTime.Now:yyyyMMdd_HHmmss}.png";
         var path = Path.Combine(_fingerprintImageRoot, fileName);
         await File.WriteAllBytesAsync(path, pngBytes);
         return fileName;
@@ -768,3 +768,4 @@ public sealed class DemoAttendanceRecord : ViewModelBase
         }
     }
 }
+

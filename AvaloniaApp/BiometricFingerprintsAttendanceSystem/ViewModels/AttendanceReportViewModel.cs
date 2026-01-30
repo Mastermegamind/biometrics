@@ -7,8 +7,8 @@ namespace BiometricFingerprintsAttendanceSystem.ViewModels;
 public sealed class AttendanceReportViewModel : ViewModelBase
 {
     private readonly IServiceRegistry _services;
-    private string _fromDate = DateTime.Now.ToShortDateString();
-    private string _toDate = DateTime.Now.ToShortDateString();
+    private string _fromDate = LagosTime.Now.ToShortDateString();
+    private string _toDate = LagosTime.Now.ToShortDateString();
     private string _studentName = string.Empty;
     private string _countText = string.Empty;
     private string _statusMessage = string.Empty;
@@ -83,3 +83,4 @@ public sealed class AttendanceReportViewModel : ViewModelBase
         StatusMessage = "Attendance count updated.";
     }
 }
+

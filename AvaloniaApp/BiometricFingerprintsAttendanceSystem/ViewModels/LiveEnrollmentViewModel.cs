@@ -488,7 +488,7 @@ public class LiveEnrollmentViewModel : ViewModelBase
                 Name = StudentName,
                 ClassName = StudentClass,
                 Templates = CapturedTemplates.ToList(),
-                EnrolledAt = DateTime.UtcNow
+                EnrolledAt = LagosTime.Now
             };
 
             var result = await _services.Data.SubmitEnrollmentAsync(request);
@@ -722,7 +722,7 @@ public class LiveEnrollmentViewModel : ViewModelBase
     {
         try
         {
-            var fileName = $"fingerprint_image_{SanitizeFileToken(regNo)}_{SanitizeFileToken(finger)}_{DateTime.UtcNow:yyyyMMddHHmmssfff}.bin";
+            var fileName = $"fingerprint_image_{SanitizeFileToken(regNo)}_{SanitizeFileToken(finger)}_{LagosTime.Now:yyyyMMddHHmmssfff}.bin";
             var path = Path.Combine(Path.GetTempPath(), fileName);
             File.WriteAllBytes(path, data);
             return path;
@@ -737,7 +737,7 @@ public class LiveEnrollmentViewModel : ViewModelBase
     {
         try
         {
-            var fileName = $"fingerprint_sample_{SanitizeFileToken(regNo)}_{SanitizeFileToken(finger)}_{DateTime.UtcNow:yyyyMMddHHmmssfff}.bin";
+            var fileName = $"fingerprint_sample_{SanitizeFileToken(regNo)}_{SanitizeFileToken(finger)}_{LagosTime.Now:yyyyMMddHHmmssfff}.bin";
             var path = Path.Combine(Path.GetTempPath(), fileName);
             File.WriteAllBytes(path, data);
             return path;
@@ -752,7 +752,7 @@ public class LiveEnrollmentViewModel : ViewModelBase
     {
         try
         {
-            var fileName = $"fingerprint_{SanitizeFileToken(regNo)}_{SanitizeFileToken(finger)}_{DateTime.UtcNow:yyyyMMddHHmmssfff}.png";
+            var fileName = $"fingerprint_{SanitizeFileToken(regNo)}_{SanitizeFileToken(finger)}_{LagosTime.Now:yyyyMMddHHmmssfff}.png";
             var path = Path.Combine(Path.GetTempPath(), fileName);
             using var fs = File.Create(path);
             bitmap.Save(fs);
@@ -815,3 +815,4 @@ public class FingerSlotViewModel : INotifyPropertyChanged
 
     public event PropertyChangedEventHandler? PropertyChanged;
 }
+

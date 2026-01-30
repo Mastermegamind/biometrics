@@ -16,18 +16,23 @@ public class OfflineDataProvider
     private readonly ILogger<OfflineDataProvider> _logger;
     private readonly IMemoryCache _cache;
     private readonly HttpClient _http = new();
+    private readonly int _minMatchScore;
+    private readonly double _maxFalseAcceptRate;
     private const string EnrollmentCacheKey = "offline_enrollments_cache";
 
     public OfflineDataProvider(
         DbConnectionFactory db,
         IFingerprintService fingerprint,
         ILogger<OfflineDataProvider> logger,
-        IMemoryCache cache)
+        IMemoryCache cache,
+        AppConfig config)
     {
         _db = db;
         _fingerprint = fingerprint;
         _logger = logger;
         _cache = cache;
+        _minMatchScore = config.MinMatchScore;
+        _maxFalseAcceptRate = config.MaxFalseAcceptRate;
     }
 
     /// <summary>
@@ -289,7 +294,13 @@ public class OfflineDataProvider
                 foreach (var template in templates)
                 {
                     var verifyResult = await _fingerprint.VerifyAsync(request.FingerprintTemplate, template.TemplateData);
-                    if (verifyResult.IsMatch)
+                    _logger.LogInformation(
+                        "Clock-in verify attempt RegNo={RegNo} Finger={Finger} Score={Score} FAR={FAR}",
+                        regNo, template.Finger, verifyResult.MatchScore, verifyResult.FalseAcceptRate);
+
+                    if (verifyResult.IsMatch &&
+                        verifyResult.MatchScore >= _minMatchScore &&
+                        (verifyResult.FalseAcceptRate <= 0 || verifyResult.FalseAcceptRate <= _maxFalseAcceptRate))
                     {
                         matchedRegNo = regNo;
                         break;
@@ -330,7 +341,7 @@ public class OfflineDataProvider
             }
 
             // Record clock-in
-            var now = DateTime.Now;
+            var now = LagosTime.Now;
             await using var insertCmd = conn.CreateCommand();
             insertCmd.CommandText = @"
                 INSERT INTO attendance (regno, name, date, day, timein)
@@ -381,7 +392,13 @@ public class OfflineDataProvider
                 foreach (var template in templates)
                 {
                     var verifyResult = await _fingerprint.VerifyAsync(request.FingerprintTemplate, template.TemplateData);
-                    if (verifyResult.IsMatch)
+                    _logger.LogInformation(
+                        "Clock-out verify attempt RegNo={RegNo} Finger={Finger} Score={Score} FAR={FAR}",
+                        regNo, template.Finger, verifyResult.MatchScore, verifyResult.FalseAcceptRate);
+
+                    if (verifyResult.IsMatch &&
+                        verifyResult.MatchScore >= _minMatchScore &&
+                        (verifyResult.FalseAcceptRate <= 0 || verifyResult.FalseAcceptRate <= _maxFalseAcceptRate))
                     {
                         matchedRegNo = regNo;
                         break;
@@ -427,7 +444,7 @@ public class OfflineDataProvider
             await reader.CloseAsync();
 
             // Update with clock-out time
-            var now = DateTime.Now;
+            var now = LagosTime.Now;
             await using var updateCmd = conn.CreateCommand();
             updateCmd.CommandText = "UPDATE attendance SET timeout = @timeout WHERE id = @id";
             updateCmd.Parameters.AddWithValue("@timeout", now.ToString("HH:mm:ss"));
@@ -541,7 +558,7 @@ public class OfflineDataProvider
                 VALUES (@type, @payload, @created)";
             cmd.Parameters.AddWithValue("@type", operationType);
             cmd.Parameters.AddWithValue("@payload", jsonPayload);
-            cmd.Parameters.AddWithValue("@created", DateTime.UtcNow);
+            cmd.Parameters.AddWithValue("@created", LagosTime.Now);
 
             await cmd.ExecuteNonQueryAsync();
             return DataResult.Ok();
@@ -824,7 +841,7 @@ public class OfflineDataProvider
             // Ignore URL parsing errors
         }
 
-        return $"passport_{SanitizeFileName(regNo)}_{DateTime.UtcNow:yyyyMMddHHmmss}.jpg";
+        return $"passport_{SanitizeFileName(regNo)}_{LagosTime.Now:yyyyMMddHHmmss}.jpg";
     }
 
     private static byte[]? TryLoadPassportFromDisk(string? fileName)
@@ -862,7 +879,7 @@ public class OfflineDataProvider
 
         try
         {
-            var fileName = $"fp_{SanitizeFileName(regNo)}_{DateTime.UtcNow:yyyyMMddHHmmssfff}.png";
+            var fileName = $"fp_{SanitizeFileName(regNo)}_{LagosTime.Now:yyyyMMddHHmmssfff}.png";
             var dir = GetFingerprintPreviewDir();
             var destPath = Path.Combine(dir, fileName);
             File.Copy(sourcePath, destPath, overwrite: true);
@@ -874,3 +891,4 @@ public class OfflineDataProvider
         }
     }
 }
+

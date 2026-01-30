@@ -111,7 +111,7 @@ public sealed class StudentRepository
         }
 
         var dir = GetPassportStorageDir();
-        var fileName = $"passport_{SanitizeFileName(regNo)}_{DateTime.UtcNow:yyyyMMddHHmmss}.jpg";
+        var fileName = $"passport_{SanitizeFileName(regNo)}_{LagosTime.Now:yyyyMMddHHmmss}.jpg";
         var path = Path.Combine(dir, fileName);
         File.WriteAllBytes(path, bytes);
         return fileName;
@@ -135,3 +135,4 @@ public sealed class StudentRepository
         return cleaned.Replace(' ', '_');
     }
 }
+

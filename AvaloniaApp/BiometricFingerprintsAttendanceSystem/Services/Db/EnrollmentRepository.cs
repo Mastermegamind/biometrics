@@ -71,7 +71,7 @@ public sealed class EnrollmentRepository
         cmd.Parameters.AddWithValue("@fingerIndex", fingerIndex);
         cmd.Parameters.AddWithValue("@fingerName", GetFingerName(fingerIndex).ToLowerInvariant().Replace(' ', '-'));
         cmd.Parameters.AddWithValue("@data", templateData);
-        cmd.Parameters.AddWithValue("@capturedAt", DateTime.UtcNow);
+        cmd.Parameters.AddWithValue("@capturedAt", LagosTime.Now);
 
         await cmd.ExecuteNonQueryAsync(cancellationToken);
     }
@@ -126,3 +126,4 @@ public sealed class EnrollmentRepository
         _ => $"Finger {index}"
     };
 }
+

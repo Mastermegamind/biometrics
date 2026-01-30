@@ -120,8 +120,8 @@ public class LiveClockOutViewModel : ViewModelBase
 
     public string SyncModeDisplay => $"Mode: {_services.Data.Mode}";
     public bool IsOnline => _services.Data.IsOnline;
-    public string CurrentDate => DateTime.Now.ToString("dddd, MMMM dd, yyyy");
-    public string CurrentTime => DateTime.Now.ToString("HH:mm:ss");
+    public string CurrentDate => LagosTime.Now.ToString("dddd, MMMM dd, yyyy");
+    public string CurrentTime => LagosTime.Now.ToString("HH:mm:ss");
 
     // ==================== Commands ====================
 
@@ -202,7 +202,7 @@ public class LiveClockOutViewModel : ViewModelBase
             var clockOutRequest = new ClockOutRequest
             {
                 FingerprintTemplate = templateData,
-                Timestamp = DateTime.UtcNow
+                Timestamp = LagosTime.Now
             };
 
             var result = await _services.Data.ClockOutAsync(clockOutRequest);
@@ -217,7 +217,7 @@ public class LiveClockOutViewModel : ViewModelBase
                 StudentRegNo = result.Student.RegNo;
                 StudentClass = result.Student.ClassName;
                 ClockInTime = result.ClockInTime?.ToString("HH:mm:ss") ?? "--:--:--";
-                ClockOutTime = result.ClockOutTime?.ToString("HH:mm:ss") ?? DateTime.Now.ToString("HH:mm:ss");
+                ClockOutTime = result.ClockOutTime?.ToString("HH:mm:ss") ?? LagosTime.Now.ToString("HH:mm:ss");
 
                 // Calculate and display duration
                 if (result.Duration.HasValue)
@@ -308,3 +308,4 @@ public class LiveClockOutViewModel : ViewModelBase
         return $"{duration.Minutes}m {duration.Seconds}s";
     }
 }
+

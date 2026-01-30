@@ -58,7 +58,7 @@ public sealed class JsonFileLoggerProvider : ILoggerProvider
 
             var payload = new
             {
-                timestamp = DateTime.UtcNow.ToString("O"),
+                timestamp = LagosTime.Now.ToString("O"),
                 level = logLevel.ToString(),
                 category = _category,
                 eventId = eventId.Id,
@@ -80,3 +80,4 @@ public sealed class JsonFileLoggerProvider : ILoggerProvider
         public void Dispose() { }
     }
 }
+

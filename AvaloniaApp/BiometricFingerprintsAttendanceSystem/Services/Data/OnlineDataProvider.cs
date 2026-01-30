@@ -1,6 +1,7 @@
 using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using Microsoft.Extensions.Logging;
 using BiometricFingerprintsAttendanceSystem.Services.Net;
 using BiometricFingerprintsAttendanceSystem.Services.Fingerprint;
@@ -183,28 +184,42 @@ public class OnlineDataProvider
     {
         try
         {
+            var records = new List<ApiEnrollmentRecord>();
+            foreach (var t in request.Templates)
+            {
+                LogTemplateByteLength(request.RegNo, t);
+                records.Add(new ApiEnrollmentRecord
+                {
+                    RegNo = request.RegNo,
+                    FingerIndex = t.FingerIndex,
+                    FingerName = NormalizeFingerForApi(t.Finger, t.FingerIndex),
+                    Template = Convert.ToBase64String(t.TemplateData),
+                    TemplateData = Convert.ToBase64String(t.TemplateData),
+                    ImagePreview = string.IsNullOrWhiteSpace(t.ImagePath) ? null : Path.GetFileName(t.ImagePath),
+                    ImagePreviewData = LoadPreviewBase64(t.ImagePath),
+                    CapturedAt = request.EnrolledAt
+                });
+            }
+
             var payload = new ApiEnrollmentSubmitRequest
             {
                 RegNo = request.RegNo,
-                Name = request.Name,
-                ClassName = request.ClassName,
-                Templates = request.Templates.Select(t => new ApiTemplatePayload
-                {
-                    Finger = NormalizeFingerForApi(t.Finger, t.FingerIndex),
-                    FingerIndex = t.FingerIndex,
-                    TemplateBase64 = Convert.ToBase64String(t.TemplateData)
-                }).ToList(),
-                EnrolledAt = request.EnrolledAt
+                Records = records
             };
 
-            var path = "/api/enrollment/submit";
+            var path = NormalizeApiPath(_config.EnrollmentSubmitPath);
             LogRequest("POST", path, new
             {
                 payload.RegNo,
-                payload.Name,
-                payload.ClassName,
-                Templates = payload.Templates.Select(t => new { t.Finger, t.FingerIndex, TemplateBytes = t.TemplateBase64.Length }).ToList(),
-                payload.EnrolledAt
+                Records = payload.Records.Select(t => new
+                {
+                    t.RegNo,
+                    t.FingerName,
+                    t.FingerIndex,
+                    TemplateBytes = t.Template.Length,
+                    t.ImagePreview,
+                    t.CapturedAt
+                }).ToList()
             });
             var response = await _http.PostAsJsonAsync(path, payload, _jsonOptions);
             var body = await SafeReadResponseBodyAsync(response);
@@ -238,6 +253,7 @@ public class OnlineDataProvider
                 Timestamp = request.Timestamp,
                 DeviceId = request.DeviceId
             };
+            _logger.LogInformation("Clock-in payload template bytes: {ByteCount}", request.FingerprintTemplate?.Length ?? 0);
 
             var path = "/api/attendance/clockin";
             LogRequest("POST", path, new
@@ -299,6 +315,7 @@ public class OnlineDataProvider
                 Timestamp = request.Timestamp,
                 DeviceId = request.DeviceId
             };
+            _logger.LogInformation("Clock-out payload template bytes: {ByteCount}", request.FingerprintTemplate?.Length ?? 0);
 
             var path = "/api/attendance/clockout";
             LogRequest("POST", path, new
@@ -462,18 +479,30 @@ public class OnlineDataProvider
 
     private record ApiEnrollmentSubmitRequest
     {
+        [JsonPropertyName("regno")]
         public string RegNo { get; init; } = "";
-        public string Name { get; init; } = "";
-        public string ClassName { get; init; } = "";
-        public List<ApiTemplatePayload> Templates { get; init; } = [];
-        public DateTime EnrolledAt { get; init; }
+        [JsonPropertyName("records")]
+        public List<ApiEnrollmentRecord> Records { get; init; } = [];
     }
 
-    private record ApiTemplatePayload
+    private record ApiEnrollmentRecord
     {
-        public string Finger { get; init; } = "";
+        [JsonPropertyName("regno")]
+        public string RegNo { get; init; } = "";
+        [JsonPropertyName("finger_index")]
         public int FingerIndex { get; init; }
-        public string TemplateBase64 { get; init; } = "";
+        [JsonPropertyName("finger_name")]
+        public string FingerName { get; init; } = "";
+        [JsonPropertyName("template")]
+        public string Template { get; init; } = "";
+        [JsonPropertyName("template_data")]
+        public string? TemplateData { get; init; }
+        [JsonPropertyName("image_preview")]
+        public string? ImagePreview { get; init; }
+        [JsonPropertyName("image_preview_data")]
+        public string? ImagePreviewData { get; init; }
+        [JsonPropertyName("captured_at")]
+        public DateTime CapturedAt { get; init; }
     }
 
     private record ApiClockInRequest
@@ -614,5 +643,31 @@ public class OnlineDataProvider
         }
 
         return $"/api/{trimmed}";
+    }
+
+    private void LogTemplateByteLength(string regNo, FingerprintTemplate template)
+    {
+        var bytes = template.TemplateData?.Length ?? 0;
+        _logger.LogInformation(
+            "Enrollment payload bytes RegNo={RegNo} Finger={Finger} Index={Index} Bytes={Bytes}",
+            regNo, template.Finger, template.FingerIndex, bytes);
+    }
+
+    private static string? LoadPreviewBase64(string? imagePath)
+    {
+        if (string.IsNullOrWhiteSpace(imagePath) || !File.Exists(imagePath))
+        {
+            return null;
+        }
+
+        try
+        {
+            var bytes = File.ReadAllBytes(imagePath);
+            return bytes.Length == 0 ? null : Convert.ToBase64String(bytes);
+        }
+        catch
+        {
+            return null;
+        }
     }
 }

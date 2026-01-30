@@ -106,8 +106,8 @@ public class LiveClockInViewModel : ViewModelBase
 
     public string SyncModeDisplay => $"Mode: {_services.Data.Mode}";
     public bool IsOnline => _services.Data.IsOnline;
-    public string CurrentDate => DateTime.Now.ToString("dddd, MMMM dd, yyyy");
-    public string CurrentTime => DateTime.Now.ToString("HH:mm:ss");
+    public string CurrentDate => LagosTime.Now.ToString("dddd, MMMM dd, yyyy");
+    public string CurrentTime => LagosTime.Now.ToString("HH:mm:ss");
 
     // ==================== Commands ====================
 
@@ -189,7 +189,7 @@ public class LiveClockInViewModel : ViewModelBase
             var clockInRequest = new ClockInRequest
             {
                 FingerprintTemplate = templateData,
-                Timestamp = DateTime.UtcNow
+                Timestamp = LagosTime.Now
             };
 
             var result = await _services.Data.ClockInAsync(clockInRequest);
@@ -203,7 +203,7 @@ public class LiveClockInViewModel : ViewModelBase
                 StudentName = result.Student.Name;
                 StudentRegNo = result.Student.RegNo;
                 StudentClass = result.Student.ClassName;
-                ClockInTime = result.ClockInTime?.ToString("HH:mm:ss") ?? DateTime.Now.ToString("HH:mm:ss");
+                ClockInTime = result.ClockInTime?.ToString("HH:mm:ss") ?? LagosTime.Now.ToString("HH:mm:ss");
 
                 // Load photo
                 if (result.Student.PassportPhoto != null)
@@ -277,3 +277,4 @@ public class LiveClockInViewModel : ViewModelBase
         OnPropertyChanged(nameof(CurrentTime));
     }
 }
+

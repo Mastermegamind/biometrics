@@ -39,7 +39,7 @@ public sealed class LoginAttemptRepository
             }
 
             var lockoutUntil = Convert.ToDateTime(result);
-            return lockoutUntil > DateTime.UtcNow ? lockoutUntil : null;
+            return lockoutUntil > LagosTime.Now ? lockoutUntil : null;
         }
         catch (Exception ex)
         {
@@ -55,7 +55,7 @@ public sealed class LoginAttemptRepository
 
     public async Task<DateTime?> RecordFailureAsync(string username, string? message = null, CancellationToken cancellationToken = default)
     {
-        var now = DateTime.UtcNow;
+        var now = LagosTime.Now;
         var since = now - _lockoutWindow;
         int failureCount = 1;
 
@@ -115,3 +115,4 @@ public sealed class LoginAttemptRepository
         await cmd.ExecuteNonQueryAsync(cancellationToken);
     }
 }
+

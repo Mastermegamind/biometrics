@@ -99,7 +99,7 @@ public sealed class TimeOutViewModel : ViewModelBase
 
     private async Task TimeOutAsync()
     {
-        var date = DateTime.Now.ToShortDateString();
+        var date = LagosTime.Now.ToShortDateString();
         var existing = await _services.Attendance.GetTimeOutAsync(RegNo.Trim(), date);
         if (!string.IsNullOrWhiteSpace(existing))
         {
@@ -107,7 +107,8 @@ public sealed class TimeOutViewModel : ViewModelBase
             return;
         }
 
-        await _services.Attendance.UpdateTimeOutAsync(RegNo.Trim(), DateTime.Now.ToShortTimeString());
+        await _services.Attendance.UpdateTimeOutAsync(RegNo.Trim(), LagosTime.Now.ToShortTimeString());
         StatusMessage = "Time-out recorded.";
     }
 }
+

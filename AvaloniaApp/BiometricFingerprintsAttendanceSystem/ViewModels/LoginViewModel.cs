@@ -219,7 +219,7 @@ public sealed class LoginViewModel : ViewModelBase
         {
             await Task.WhenAll(UpdateApiStatusAsync(), UpdateDbStatusAsync());
             UpdateFingerprintStatus();
-            LastChecked = DateTime.Now.ToString("HH:mm:ss");
+            LastChecked = LagosTime.Now.ToString("HH:mm:ss");
         }
         finally
         {
@@ -279,3 +279,4 @@ public sealed class LoginViewModel : ViewModelBase
         FingerprintStatusBrush = Brushes.LimeGreen;
     }
 }
+

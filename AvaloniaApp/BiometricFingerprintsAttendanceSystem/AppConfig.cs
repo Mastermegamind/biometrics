@@ -25,7 +25,9 @@ public sealed record AppConfig(
     int MaxFailedLoginAttempts,
     int LockoutMinutes,
     int MinimumFingersRequired,
-    int CaptureTimeoutSeconds)
+    int CaptureTimeoutSeconds,
+    int MinMatchScore,
+    double MaxFalseAcceptRate)
 {
     private const string DefaultConnectionString = "Server=localhost;Database=mda_biometrics;Uid=root;Pwd=;Port=3319;";
     private const string DefaultApiBaseUrl = "https://portal.mydreamsacademy.com.ng";
@@ -74,6 +76,8 @@ public sealed record AppConfig(
         var lockoutMinutes = 15;
         var minimumFingersRequired = 2;
         var captureTimeoutSeconds = 30;
+        var minMatchScore = 70;
+        var maxFalseAcceptRate = 0.001;
 
         ApplyEnvOverrides(
             ref connectionString, ref fingerprintDevice, ref enableFingerprintSdks,
@@ -82,7 +86,7 @@ public sealed record AppConfig(
             ref enableDemoMode, ref demoAdminEmail, ref demoAdminPassword,
             ref demoStudentRegNo, ref demoStudentName, ref demoStudentClass,
             ref syncMode, ref apiTimeoutSeconds, ref maxFailedLoginAttempts, ref lockoutMinutes, ref minimumFingersRequired,
-            ref captureTimeoutSeconds);
+            ref captureTimeoutSeconds, ref minMatchScore, ref maxFalseAcceptRate);
 
         return new AppConfig(
             connectionString, fingerprintDevice, enableFingerprintSdks,
@@ -91,7 +95,7 @@ public sealed record AppConfig(
             enableDemoMode, demoAdminEmail, demoAdminPassword,
             demoStudentRegNo, demoStudentName, demoStudentClass,
             syncMode, apiTimeoutSeconds, maxFailedLoginAttempts, lockoutMinutes, minimumFingersRequired,
-            captureTimeoutSeconds);
+            captureTimeoutSeconds, minMatchScore, maxFalseAcceptRate);
     }
 
     private static AppConfig ParseConfig(JsonDocument doc)
@@ -118,6 +122,8 @@ public sealed record AppConfig(
         var lockoutMinutes = 15;
         var minimumFingersRequired = 2;
         var captureTimeoutSeconds = 30;
+        var minMatchScore = 70;
+        var maxFalseAcceptRate = 0.001;
 
         // Parse ConnectionStrings
         if (doc.RootElement.TryGetProperty("ConnectionStrings", out var conns) &&
@@ -152,6 +158,14 @@ public sealed record AppConfig(
             if (fingerprint.TryGetProperty("CaptureTimeoutSeconds", out var captureTimeout) && captureTimeout.ValueKind == JsonValueKind.Number)
             {
                 captureTimeoutSeconds = captureTimeout.GetInt32();
+            }
+            if (fingerprint.TryGetProperty("MinMatchScore", out var minScore) && minScore.ValueKind == JsonValueKind.Number)
+            {
+                minMatchScore = minScore.GetInt32();
+            }
+            if (fingerprint.TryGetProperty("MaxFalseAcceptRate", out var maxFar) && maxFar.ValueKind == JsonValueKind.Number)
+            {
+                maxFalseAcceptRate = maxFar.GetDouble();
             }
         }
 
@@ -263,7 +277,7 @@ public sealed record AppConfig(
             ref enableDemoMode, ref demoAdminEmail, ref demoAdminPassword,
             ref demoStudentRegNo, ref demoStudentName, ref demoStudentClass,
             ref syncMode, ref apiTimeoutSeconds, ref maxFailedLoginAttempts, ref lockoutMinutes, ref minimumFingersRequired,
-            ref captureTimeoutSeconds);
+            ref captureTimeoutSeconds, ref minMatchScore, ref maxFalseAcceptRate);
 
         return new AppConfig(
             connectionString, fingerprintDevice, enableFingerprintSdks,
@@ -272,7 +286,7 @@ public sealed record AppConfig(
             enableDemoMode, demoAdminEmail, demoAdminPassword,
             demoStudentRegNo, demoStudentName, demoStudentClass,
             syncMode, apiTimeoutSeconds, maxFailedLoginAttempts, lockoutMinutes, minimumFingersRequired,
-            captureTimeoutSeconds);
+            captureTimeoutSeconds, minMatchScore, maxFalseAcceptRate);
     }
 
     private static void ApplyEnvOverrides(
@@ -297,7 +311,9 @@ public sealed record AppConfig(
         ref int maxFailedLoginAttempts,
         ref int lockoutMinutes,
         ref int minimumFingersRequired,
-        ref int captureTimeoutSeconds)
+        ref int captureTimeoutSeconds,
+        ref int minMatchScore,
+        ref double maxFalseAcceptRate)
     {
         ApplyEnvVariable("BIOCLOCK_CONNECTION_STRING", ref connectionString);
         ApplyEnvVariable("BIOCLOCK_FINGERPRINT_DEVICE", ref fingerprintDevice);
@@ -322,6 +338,8 @@ public sealed record AppConfig(
         ApplyEnvVariable("BIOCLOCK_AUTH_LOCKOUT_MINUTES", ref lockoutMinutes);
         ApplyEnvVariable("BIOCLOCK_MIN_FINGERS", ref minimumFingersRequired);
         ApplyEnvVariable("BIOCLOCK_CAPTURE_TIMEOUT", ref captureTimeoutSeconds);
+        ApplyEnvVariable("BIOCLOCK_MATCH_MIN_SCORE", ref minMatchScore);
+        ApplyEnvVariable("BIOCLOCK_MATCH_MAX_FAR", ref maxFalseAcceptRate);
     }
 
     private static void ApplyEnvVariable(string envKey, ref string value)
@@ -346,6 +364,15 @@ public sealed record AppConfig(
     {
         var envValue = Environment.GetEnvironmentVariable(envKey);
         if (int.TryParse(envValue, out var parsedValue))
+        {
+            value = parsedValue;
+        }
+    }
+
+    private static void ApplyEnvVariable(string envKey, ref double value)
+    {
+        var envValue = Environment.GetEnvironmentVariable(envKey);
+        if (double.TryParse(envValue, out var parsedValue))
         {
             value = parsedValue;
         }
