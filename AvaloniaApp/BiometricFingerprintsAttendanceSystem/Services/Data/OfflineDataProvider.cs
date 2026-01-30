@@ -147,7 +147,7 @@ public class OfflineDataProvider
 
             // Check if already enrolled
             await using var checkCmd = conn.CreateCommand();
-            checkCmd.CommandText = "SELECT id FROM new_enrollment WHERE matricno = @regNo";
+            checkCmd.CommandText = "SELECT matricno FROM new_enrollment WHERE matricno = @regNo";
             checkCmd.Parameters.AddWithValue("@regNo", request.RegNo);
             var existingId = await checkCmd.ExecuteScalarAsync();
 

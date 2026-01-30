@@ -3,6 +3,7 @@ using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using BiometricFingerprintsAttendanceSystem.Services.Net;
+using BiometricFingerprintsAttendanceSystem.Services.Fingerprint;
 
 namespace BiometricFingerprintsAttendanceSystem.Services.Data;
 
@@ -189,7 +190,7 @@ public class OnlineDataProvider
                 ClassName = request.ClassName,
                 Templates = request.Templates.Select(t => new ApiTemplatePayload
                 {
-                    Finger = t.Finger,
+                    Finger = NormalizeFingerForApi(t.Finger, t.FingerIndex),
                     FingerIndex = t.FingerIndex,
                     TemplateBase64 = Convert.ToBase64String(t.TemplateData)
                 }).ToList(),
@@ -387,6 +388,45 @@ public class OnlineDataProvider
             _logger.LogError(ex, "Failed to get attendance");
             return DataResult<List<AttendanceRecord>>.Fail(ex.Message);
         }
+    }
+
+    private static string NormalizeFingerForApi(string? finger, int fingerIndex)
+    {
+        if (!string.IsNullOrWhiteSpace(finger))
+        {
+            var compact = finger.Replace(" ", "", StringComparison.OrdinalIgnoreCase);
+            var pos = compact switch
+            {
+                "RightThumb" => FingerPosition.RightThumb,
+                "RightIndex" or "RightIndexFinger" => FingerPosition.RightIndexFinger,
+                "RightMiddle" or "RightMiddleFinger" => FingerPosition.RightMiddleFinger,
+                "RightRing" or "RightRingFinger" => FingerPosition.RightRingFinger,
+                "RightLittle" or "RightLittleFinger" => FingerPosition.RightLittleFinger,
+                "LeftThumb" => FingerPosition.LeftThumb,
+                "LeftIndex" or "LeftIndexFinger" => FingerPosition.LeftIndexFinger,
+                "LeftMiddle" or "LeftMiddleFinger" => FingerPosition.LeftMiddleFinger,
+                "LeftRing" or "LeftRingFinger" => FingerPosition.LeftRingFinger,
+                "LeftLittle" or "LeftLittleFinger" => FingerPosition.LeftLittleFinger,
+                _ => FingerPosition.Unknown
+            };
+
+            if (pos != FingerPosition.Unknown)
+            {
+                return pos.ToFprintdName();
+            }
+
+            if (finger.Contains('-', StringComparison.Ordinal))
+            {
+                return finger.ToLowerInvariant();
+            }
+        }
+
+        if (fingerIndex >= 1 && fingerIndex <= 10)
+        {
+            return ((FingerPosition)fingerIndex).ToFprintdName();
+        }
+
+        return "any";
     }
 
     // ==================== API DTOs ====================
