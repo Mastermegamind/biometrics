@@ -63,3 +63,4 @@ $RECYCLE.BIN/
 .DS_Store
 
 .fake
+AvaloniaApp/BiometricFingerprintsAttendanceSystem/.env
