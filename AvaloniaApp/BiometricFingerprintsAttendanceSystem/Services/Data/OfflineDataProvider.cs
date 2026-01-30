@@ -214,6 +214,52 @@ public class OfflineDataProvider
     }
 
     /// <summary>
+    /// Get enrolled fingerprint templates for a specific student from local database.
+    /// </summary>
+    public async Task<DataResult<List<FingerprintTemplate>>> GetEnrollmentTemplatesAsync(string regNo)
+    {
+        try
+        {
+            await using var conn = await _db.CreateConnectionAsync();
+            await using var cmd = conn.CreateCommand();
+            cmd.CommandText = @"
+                SELECT finger_index, finger_name, template
+                FROM fingerprint_enrollments
+                WHERE regno = @regno
+                ORDER BY finger_index";
+            cmd.Parameters.AddWithValue("@regno", regNo);
+
+            var results = new List<FingerprintTemplate>();
+            await using var reader = await cmd.ExecuteReaderAsync();
+            while (await reader.ReadAsync())
+            {
+                var fingerIndex = reader.GetInt32(0);
+                var fingerName = reader.IsDBNull(1) ? GetFingerName(fingerIndex) : reader.GetString(1);
+                var data = reader.IsDBNull(2) ? null : (byte[])reader[2];
+
+                if (data == null || data.Length == 0)
+                {
+                    continue;
+                }
+
+                results.Add(new FingerprintTemplate
+                {
+                    FingerIndex = fingerIndex,
+                    Finger = fingerName,
+                    TemplateData = data
+                });
+            }
+
+            return DataResult<List<FingerprintTemplate>>.Ok(results);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to get enrollment templates for {RegNo}", regNo);
+            return DataResult<List<FingerprintTemplate>>.Fail(ex.Message, "DB_ERROR");
+        }
+    }
+
+    /// <summary>
     /// Get all enrolled fingerprints for local matching.
     /// </summary>
     public async Task<DataResult<List<(string RegNo, List<FingerprintTemplate> Templates)>>> GetAllEnrollmentsAsync()

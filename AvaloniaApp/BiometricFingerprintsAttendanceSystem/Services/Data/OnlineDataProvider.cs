@@ -178,6 +178,68 @@ public class OnlineDataProvider
     }
 
     /// <summary>
+    /// Get enrolled fingerprint templates for a specific student from API.
+    /// </summary>
+    public async Task<DataResult<List<FingerprintTemplate>>> GetEnrollmentTemplatesAsync(string regNo)
+    {
+        try
+        {
+            var path = BuildApiRegNoPath(_config.EnrollmentTemplatesPath, regNo);
+            LogRequest("GET", path, new { regNo });
+            var response = await _http.GetAsync(path);
+            var body = await SafeReadResponseBodyAsync(response);
+            LogResponse(path, response, body);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                return DataResult<List<FingerprintTemplate>>.Fail($"API error: {response.StatusCode}");
+            }
+
+            var records = ParseEnrollmentRecords(body);
+            var templates = new List<FingerprintTemplate>();
+            foreach (var record in records)
+            {
+                var base64 = string.IsNullOrWhiteSpace(record.TemplateData)
+                    ? record.Template
+                    : record.TemplateData;
+                if (string.IsNullOrWhiteSpace(base64))
+                {
+                    continue;
+                }
+
+                byte[]? bytes;
+                try
+                {
+                    bytes = Convert.FromBase64String(base64);
+                }
+                catch
+                {
+                    continue;
+                }
+
+                if (bytes.Length == 0)
+                {
+                    continue;
+                }
+
+                templates.Add(new FingerprintTemplate
+                {
+                    FingerIndex = record.FingerIndex,
+                    Finger = record.FingerName ?? $"Finger {record.FingerIndex}",
+                    TemplateData = bytes
+                });
+            }
+
+            return DataResult<List<FingerprintTemplate>>.Ok(templates);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to get enrollment templates for {RegNo}", regNo);
+            return DataResult<List<FingerprintTemplate>>.Fail(ex.Message);
+        }
+    }
+
+    /// <summary>
     /// Submit enrollment.
     /// </summary>
     public async Task<DataResult> SubmitEnrollmentAsync(EnrollmentRequest request)
@@ -477,6 +539,13 @@ public class OnlineDataProvider
         public DateTime? EnrolledAt { get; init; }
     }
 
+    private record ApiEnrollmentListEnvelope
+    {
+        public bool Success { get; init; }
+        public List<ApiEnrollmentRecord>? Records { get; init; }
+        public List<ApiEnrollmentRecord>? Data { get; init; }
+    }
+
     private record ApiEnrollmentSubmitRequest
     {
         [JsonPropertyName("regno")]
@@ -668,6 +737,41 @@ public class OnlineDataProvider
         catch
         {
             return null;
+        }
+    }
+
+    private List<ApiEnrollmentRecord> ParseEnrollmentRecords(string body)
+    {
+        if (string.IsNullOrWhiteSpace(body))
+        {
+            return [];
+        }
+
+        try
+        {
+            var envelope = JsonSerializer.Deserialize<ApiEnrollmentListEnvelope>(body, _jsonOptions);
+            if (envelope?.Records != null && envelope.Records.Count > 0)
+            {
+                return envelope.Records;
+            }
+            if (envelope?.Data != null && envelope.Data.Count > 0)
+            {
+                return envelope.Data;
+            }
+        }
+        catch
+        {
+            // fall through to try array parsing
+        }
+
+        try
+        {
+            var direct = JsonSerializer.Deserialize<List<ApiEnrollmentRecord>>(body, _jsonOptions);
+            return direct ?? [];
+        }
+        catch
+        {
+            return [];
         }
     }
 }

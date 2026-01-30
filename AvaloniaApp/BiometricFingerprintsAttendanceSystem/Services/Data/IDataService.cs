@@ -46,6 +46,11 @@ public interface IDataService
     Task<DataResult> SubmitEnrollmentAsync(EnrollmentRequest request);
 
     /// <summary>
+    /// Get enrolled fingerprint templates for a specific student.
+    /// </summary>
+    Task<DataResult<List<FingerprintTemplate>>> GetEnrollmentTemplatesAsync(string regNo);
+
+    /// <summary>
     /// Get all enrolled fingerprint templates for local matching.
     /// Only used in offline modes.
     /// </summary>

@@ -40,6 +40,34 @@ public sealed class EnrollmentRepository
         return results;
     }
 
+    public async Task<IReadOnlyList<EnrollmentTemplate>> GetTemplatesByRegNoAsync(string regNo, CancellationToken cancellationToken = default)
+    {
+        var results = new List<EnrollmentTemplate>();
+        await using var conn = _factory.Create();
+        await conn.OpenAsync(cancellationToken);
+
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText = "SELECT regno, finger_index, template FROM fingerprint_enrollments WHERE regno = @regno";
+        cmd.Parameters.AddWithValue("@regno", regNo);
+
+        await using var reader = await cmd.ExecuteReaderAsync(cancellationToken);
+        while (await reader.ReadAsync(cancellationToken))
+        {
+            var fingerIndex = reader.GetInt32("finger_index");
+            if (reader["template"] is byte[] bytes && bytes.Length > 0)
+            {
+                results.Add(new EnrollmentTemplate
+                {
+                    RegNo = regNo,
+                    FingerIndex = fingerIndex,
+                    TemplateData = bytes
+                });
+            }
+        }
+
+        return results;
+    }
+
     public async Task<bool> HasEnrollmentAsync(string matricNo, CancellationToken cancellationToken = default)
     {
         await using var conn = _factory.Create();

@@ -13,6 +13,7 @@ public sealed record AppConfig(
     string StudentLookupPath,
     string EnrollmentStatusPath,
     string EnrollmentSubmitPath,
+    string EnrollmentTemplatesPath,
     string IdentifyPath,
     bool EnableDemoMode,
     string DemoAdminEmail,
@@ -63,6 +64,7 @@ public sealed record AppConfig(
         var studentLookupPath = "students?regNo={regNo}";
         var enrollmentStatusPath = "enrollment/status?regNo={regNo}";
         var enrollmentSubmitPath = "enrollments";
+        var enrollmentTemplatesPath = "enrollments/templates?regNo={regNo}";
         var identifyPath = "identify";
         var enableDemoMode = false;
         var demoAdminEmail = "demo@example.com";
@@ -82,7 +84,7 @@ public sealed record AppConfig(
         ApplyEnvOverrides(
             ref connectionString, ref fingerprintDevice, ref enableFingerprintSdks,
             ref apiBaseUrl, ref apiKey, ref apiKeyHeader,
-            ref studentLookupPath, ref enrollmentStatusPath, ref enrollmentSubmitPath, ref identifyPath,
+            ref studentLookupPath, ref enrollmentStatusPath, ref enrollmentSubmitPath, ref enrollmentTemplatesPath, ref identifyPath,
             ref enableDemoMode, ref demoAdminEmail, ref demoAdminPassword,
             ref demoStudentRegNo, ref demoStudentName, ref demoStudentClass,
             ref syncMode, ref apiTimeoutSeconds, ref maxFailedLoginAttempts, ref lockoutMinutes, ref minimumFingersRequired,
@@ -91,7 +93,7 @@ public sealed record AppConfig(
         return new AppConfig(
             connectionString, fingerprintDevice, enableFingerprintSdks,
             apiBaseUrl, apiKey, apiKeyHeader,
-            studentLookupPath, enrollmentStatusPath, enrollmentSubmitPath, identifyPath,
+            studentLookupPath, enrollmentStatusPath, enrollmentSubmitPath, enrollmentTemplatesPath, identifyPath,
             enableDemoMode, demoAdminEmail, demoAdminPassword,
             demoStudentRegNo, demoStudentName, demoStudentClass,
             syncMode, apiTimeoutSeconds, maxFailedLoginAttempts, lockoutMinutes, minimumFingersRequired,
@@ -109,6 +111,7 @@ public sealed record AppConfig(
         var studentLookupPath = "students?regNo={regNo}";
         var enrollmentStatusPath = "enrollment/status?regNo={regNo}";
         var enrollmentSubmitPath = "enrollments";
+        var enrollmentTemplatesPath = "enrollments/templates?regNo={regNo}";
         var identifyPath = "identify";
         var enableDemoMode = false;
         var demoAdminEmail = "demo@example.com";
@@ -202,6 +205,11 @@ public sealed record AppConfig(
                 enrollmentSubmitPath = submit.GetString() ?? enrollmentSubmitPath;
             }
 
+            if (api.TryGetProperty("EnrollmentTemplatesPath", out var templatesPath) && templatesPath.ValueKind == JsonValueKind.String)
+            {
+                enrollmentTemplatesPath = templatesPath.GetString() ?? enrollmentTemplatesPath;
+            }
+
             if (api.TryGetProperty("IdentifyPath", out var identify) && identify.ValueKind == JsonValueKind.String)
             {
                 identifyPath = identify.GetString() ?? identifyPath;
@@ -273,7 +281,7 @@ public sealed record AppConfig(
         ApplyEnvOverrides(
             ref connectionString, ref fingerprintDevice, ref enableFingerprintSdks,
             ref apiBaseUrl, ref apiKey, ref apiKeyHeader,
-            ref studentLookupPath, ref enrollmentStatusPath, ref enrollmentSubmitPath, ref identifyPath,
+            ref studentLookupPath, ref enrollmentStatusPath, ref enrollmentSubmitPath, ref enrollmentTemplatesPath, ref identifyPath,
             ref enableDemoMode, ref demoAdminEmail, ref demoAdminPassword,
             ref demoStudentRegNo, ref demoStudentName, ref demoStudentClass,
             ref syncMode, ref apiTimeoutSeconds, ref maxFailedLoginAttempts, ref lockoutMinutes, ref minimumFingersRequired,
@@ -282,7 +290,7 @@ public sealed record AppConfig(
         return new AppConfig(
             connectionString, fingerprintDevice, enableFingerprintSdks,
             apiBaseUrl, apiKey, apiKeyHeader,
-            studentLookupPath, enrollmentStatusPath, enrollmentSubmitPath, identifyPath,
+            studentLookupPath, enrollmentStatusPath, enrollmentSubmitPath, enrollmentTemplatesPath, identifyPath,
             enableDemoMode, demoAdminEmail, demoAdminPassword,
             demoStudentRegNo, demoStudentName, demoStudentClass,
             syncMode, apiTimeoutSeconds, maxFailedLoginAttempts, lockoutMinutes, minimumFingersRequired,
@@ -299,6 +307,7 @@ public sealed record AppConfig(
         ref string studentLookupPath,
         ref string enrollmentStatusPath,
         ref string enrollmentSubmitPath,
+        ref string enrollmentTemplatesPath,
         ref string identifyPath,
         ref bool enableDemoMode,
         ref string demoAdminEmail,
@@ -325,6 +334,7 @@ public sealed record AppConfig(
         ApplyEnvVariable("BIOCLOCK_STUDENT_LOOKUP_PATH", ref studentLookupPath);
         ApplyEnvVariable("BIOCLOCK_ENROLLMENT_STATUS_PATH", ref enrollmentStatusPath);
         ApplyEnvVariable("BIOCLOCK_ENROLLMENT_SUBMIT_PATH", ref enrollmentSubmitPath);
+        ApplyEnvVariable("BIOCLOCK_ENROLLMENT_TEMPLATES_PATH", ref enrollmentTemplatesPath);
         ApplyEnvVariable("BIOCLOCK_IDENTIFY_PATH", ref identifyPath);
         ApplyEnvVariable("BIOCLOCK_DEMO_MODE", ref enableDemoMode);
         ApplyEnvVariable("BIOCLOCK_DEMO_ADMIN_EMAIL", ref demoAdminEmail);

@@ -138,6 +138,18 @@ public class DataService : IDataService
         };
     }
 
+    public async Task<DataResult<List<FingerprintTemplate>>> GetEnrollmentTemplatesAsync(string regNo)
+    {
+        return Mode switch
+        {
+            SyncMode.OnlineOnly => await _online.GetEnrollmentTemplatesAsync(regNo),
+            SyncMode.OfflineOnly => await _offline.GetEnrollmentTemplatesAsync(regNo),
+            SyncMode.OnlineFirst => await OnlineFirstGetEnrollmentTemplatesAsync(regNo),
+            SyncMode.OfflineFirst => await OfflineFirstGetEnrollmentTemplatesAsync(regNo),
+            _ => DataResult<List<FingerprintTemplate>>.Fail("Invalid sync mode")
+        };
+    }
+
     public async Task<DataResult<List<(string RegNo, List<FingerprintTemplate> Templates)>>> GetAllEnrollmentsAsync()
     {
         // Always from local for offline matching
@@ -292,6 +304,19 @@ public class DataService : IDataService
         return await _offline.GetEnrollmentStatusAsync(regNo);
     }
 
+    private async Task<DataResult<List<FingerprintTemplate>>> OnlineFirstGetEnrollmentTemplatesAsync(string regNo)
+    {
+        var result = await _online.GetEnrollmentTemplatesAsync(regNo);
+        if (result.Success)
+        {
+            _isOnline = true;
+            return result;
+        }
+
+        _isOnline = false;
+        return await _offline.GetEnrollmentTemplatesAsync(regNo);
+    }
+
     private async Task<DataResult> OnlineFirstSubmitEnrollmentAsync(EnrollmentRequest request)
     {
         // Try online first
@@ -437,6 +462,19 @@ public class DataService : IDataService
         if (online.Success && online.Data is not null)
         {
             await _offline.UpdateEnrollmentStatusAsync(regNo, online.Data);
+        }
+        return online;
+    }
+
+    private async Task<DataResult<List<FingerprintTemplate>>> OfflineFirstGetEnrollmentTemplatesAsync(string regNo)
+    {
+        var local = await _offline.GetEnrollmentTemplatesAsync(regNo);
+        if (local.Success) return local;
+
+        var online = await _online.GetEnrollmentTemplatesAsync(regNo);
+        if (online.Success)
+        {
+            _isOnline = true;
         }
         return online;
     }

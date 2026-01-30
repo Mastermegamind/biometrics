@@ -391,6 +391,25 @@ public class LiveEnrollmentViewModel : ViewModelBase
                 return;
             }
 
+            var sampleForMatch = captureResult.SampleData is { Length: > 0 } ? captureResult.SampleData : templateData;
+            if (sampleForMatch is { Length: > 0 })
+            {
+                var duplicate = await CheckDuplicateFingerprintAsync(RegNo.Trim(), slot.Index, sampleForMatch);
+                if (duplicate.IsDuplicate)
+                {
+                    var matchedName = GetFingerDisplayName(duplicate.FingerIndex);
+                    StatusMessage = $"This fingerprint matches an already enrolled finger ({matchedName}). Please use a different finger.";
+                    _logger.LogWarning(
+                        "Live enrollment duplicate finger detected for RegNo {RegNo}. Current={Current} Matched={Matched}",
+                        RegNo.Trim(), slot.Name, matchedName);
+                    return;
+                }
+            }
+            else
+            {
+                _logger.LogWarning("Live enrollment duplicate check skipped for RegNo {RegNo}: no sample data", RegNo.Trim());
+            }
+
             // Store the template
             var template = new FingerprintTemplate
             {
@@ -762,6 +781,89 @@ public class LiveEnrollmentViewModel : ViewModelBase
         {
             return null;
         }
+    }
+
+    private async Task<(bool IsDuplicate, int? FingerIndex)> CheckDuplicateFingerprintAsync(string regNo, int currentFingerIndex, byte[] sampleData)
+    {
+        var templates = new List<(int FingerIndex, byte[] TemplateData)>();
+        foreach (var captured in CapturedTemplates)
+        {
+            if (captured.FingerIndex == currentFingerIndex || captured.TemplateData.Length == 0)
+            {
+                continue;
+            }
+
+            templates.Add((captured.FingerIndex, captured.TemplateData));
+        }
+
+        var existingResult = await _services.Data.GetEnrollmentTemplatesAsync(regNo);
+        if (existingResult.Success && existingResult.Data != null)
+        {
+            foreach (var template in existingResult.Data)
+            {
+                if (template.FingerIndex == currentFingerIndex || template.TemplateData.Length == 0)
+                {
+                    continue;
+                }
+
+                templates.Add((template.FingerIndex, template.TemplateData));
+            }
+        }
+        else
+        {
+            _logger.LogWarning(
+                "Duplicate check could not load stored templates for RegNo {RegNo}: {Message}",
+                regNo, existingResult.Message ?? "Unknown error");
+        }
+
+        if (templates.Count == 0)
+        {
+            return (false, null);
+        }
+
+        var minScore = _services.AppState.Config.MinMatchScore;
+        var maxFar = _services.AppState.Config.MaxFalseAcceptRate;
+
+        foreach (var template in templates)
+        {
+            FingerprintVerifyResult result;
+            try
+            {
+                result = await _services.Fingerprint.VerifyAsync(sampleData, template.TemplateData);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Duplicate check verification error for RegNo {RegNo}", regNo);
+                continue;
+            }
+
+            if (!result.IsMatch)
+            {
+                continue;
+            }
+
+            var farOk = result.FalseAcceptRate <= 0 || result.FalseAcceptRate <= maxFar;
+            if (result.MatchScore >= minScore && farOk)
+            {
+                _logger.LogInformation(
+                    "Duplicate fingerprint match RegNo={RegNo} ExistingFingerIndex={Index} Score={Score} FAR={FAR}",
+                    regNo, template.FingerIndex, result.MatchScore, result.FalseAcceptRate);
+                return (true, template.FingerIndex);
+            }
+        }
+
+        return (false, null);
+    }
+
+    private string GetFingerDisplayName(int? fingerIndex)
+    {
+        if (!fingerIndex.HasValue)
+        {
+            return "Unknown finger";
+        }
+
+        return FingerSlots.FirstOrDefault(s => s.Index == fingerIndex.Value)?.DisplayName
+               ?? $"Finger {fingerIndex.Value}";
     }
 }
 
