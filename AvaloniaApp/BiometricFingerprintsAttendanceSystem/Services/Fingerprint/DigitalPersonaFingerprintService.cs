@@ -7,6 +7,7 @@ using DPFP;
 using DPFP.Capture;
 using DPFP.Processing;
 using DPFP.Verification;
+using System.Drawing.Imaging;
 #endif
 
 namespace BiometricFingerprintsAttendanceSystem.Services.Fingerprint;
@@ -360,9 +361,30 @@ public sealed class DigitalPersonaFingerprintService : FingerprintServiceBase
                 featureBytes = featureStream.ToArray();
             }
 
+            byte[]? previewBytes = null;
+            try
+            {
+                var converter = new DPFP.Capture.SampleConversion();
+                System.Drawing.Bitmap? bitmap = null;
+                converter.ConvertToPicture(sample, ref bitmap);
+                if (bitmap != null)
+                {
+                    using (bitmap)
+                    using (var ms = new MemoryStream())
+                    {
+                        bitmap.Save(ms, ImageFormat.Png);
+                        previewBytes = ms.ToArray();
+                    }
+                }
+            }
+            catch
+            {
+                previewBytes = null;
+            }
+
             var captureResult = feedback switch
             {
-                CaptureFeedback.Good => FingerprintCaptureResult.Successful(sampleBytes, featureBytes, 85),
+                CaptureFeedback.Good => FingerprintCaptureResult.Successful(sampleBytes, featureBytes, 85, previewBytes),
                 CaptureFeedback.None => FingerprintCaptureResult.Failed(FingerprintCaptureStatus.NoFinger),
                 CaptureFeedback.TooLight => FingerprintCaptureResult.Failed(FingerprintCaptureStatus.PoorQuality, "Image too light. Press harder."),
                 CaptureFeedback.TooNoisy => FingerprintCaptureResult.Failed(FingerprintCaptureStatus.PoorQuality, "Image too noisy. Clean the sensor."),

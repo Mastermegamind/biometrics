@@ -412,12 +412,33 @@ public class LiveEnrollmentViewModel : ViewModelBase
             slot.IsEnrolled = true;
             EnrolledCount = CapturedTemplates.Count;
 
+            if (captureResult.SampleData is { Length: > 0 })
+            {
+                var samplePath = SaveFingerprintSampleBytes(captureResult.SampleData, RegNo, slot.Name);
+                if (samplePath != null)
+                {
+                    _logger.LogInformation("Saved raw fingerprint sample bytes to {Path}", samplePath);
+                }
+            }
+
             // Display captured image if available
             if (captureResult.ImageData is { Length: > 0 })
             {
-                if (TryDecodeBitmap(captureResult.ImageData, out var bmp))
+                var rawPath = SaveFingerprintImageBytes(captureResult.ImageData, RegNo, slot.Name);
+                if (rawPath != null)
+                {
+                    _logger.LogInformation("Saved fingerprint image bytes to {Path}", rawPath);
+                }
+
+                if (TryDecodeBitmap(captureResult.ImageData, out var bmp) && bmp != null)
                 {
                     CurrentFingerprintImage = bmp;
+
+                    var pngPath = SaveFingerprintImagePng(bmp, RegNo, slot.Name);
+                    if (pngPath != null)
+                    {
+                        _logger.LogInformation("Saved decoded fingerprint preview to {Path}", pngPath);
+                    }
                 }
                 else
                 {
@@ -694,6 +715,52 @@ public class LiveEnrollmentViewModel : ViewModelBase
         return (data[0] == 0xFF && data[1] == 0xD8) ||
                (data[0] == 0x89 && data[1] == 0x50 && data[2] == 0x4E && data[3] == 0x47) ||
                (data[0] == 0x42 && data[1] == 0x4D);
+    }
+
+    private static string? SaveFingerprintImageBytes(byte[] data, string regNo, string finger)
+    {
+        try
+        {
+            var fileName = $"fingerprint_image_{SanitizeFileToken(regNo)}_{SanitizeFileToken(finger)}_{DateTime.UtcNow:yyyyMMddHHmmssfff}.bin";
+            var path = Path.Combine(Path.GetTempPath(), fileName);
+            File.WriteAllBytes(path, data);
+            return path;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private static string? SaveFingerprintSampleBytes(byte[] data, string regNo, string finger)
+    {
+        try
+        {
+            var fileName = $"fingerprint_sample_{SanitizeFileToken(regNo)}_{SanitizeFileToken(finger)}_{DateTime.UtcNow:yyyyMMddHHmmssfff}.bin";
+            var path = Path.Combine(Path.GetTempPath(), fileName);
+            File.WriteAllBytes(path, data);
+            return path;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private static string? SaveFingerprintImagePng(Bitmap bitmap, string regNo, string finger)
+    {
+        try
+        {
+            var fileName = $"fingerprint_{SanitizeFileToken(regNo)}_{SanitizeFileToken(finger)}_{DateTime.UtcNow:yyyyMMddHHmmssfff}.png";
+            var path = Path.Combine(Path.GetTempPath(), fileName);
+            using var fs = File.Create(path);
+            bitmap.Save(fs);
+            return path;
+        }
+        catch
+        {
+            return null;
+        }
     }
 }
 

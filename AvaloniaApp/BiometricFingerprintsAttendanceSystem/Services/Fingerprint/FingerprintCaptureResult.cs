@@ -16,6 +16,11 @@ public sealed class FingerprintCaptureResult
     public byte[]? SampleData { get; init; }
 
     /// <summary>
+    /// Optional preview image bytes (e.g. PNG/JPEG) suitable for display.
+    /// </summary>
+    public byte[]? PreviewImageData { get; init; }
+
+    /// <summary>
     /// The extracted fingerprint template (for storage/matching).
     /// </summary>
     public byte[]? TemplateData { get; init; }
@@ -37,15 +42,16 @@ public sealed class FingerprintCaptureResult
 
     // Back-compat aliases for older view-model expectations.
     public string? Message => ErrorMessage;
-    public byte[]? ImageData => SampleData;
+    public byte[]? ImageData => PreviewImageData ?? SampleData;
 
     /// <summary>
     /// Creates a successful capture result.
     /// </summary>
-    public static FingerprintCaptureResult Successful(byte[] sampleData, byte[]? templateData, int quality) => new()
+    public static FingerprintCaptureResult Successful(byte[] sampleData, byte[]? templateData, int quality, byte[]? previewImageData = null) => new()
     {
         Success = true,
         SampleData = sampleData,
+        PreviewImageData = previewImageData,
         TemplateData = templateData,
         Quality = quality,
         Status = FingerprintCaptureStatus.Success
