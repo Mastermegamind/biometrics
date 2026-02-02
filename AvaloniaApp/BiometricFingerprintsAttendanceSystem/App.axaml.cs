@@ -173,6 +173,7 @@ public partial class App : Application
 
         // Data Services (Online/Offline/Hybrid modes)
         services.AddSingleton<OnlineDataProvider>();
+        services.AddSingleton<OnlineTemplateMatcher>();
         services.AddSingleton<OfflineDataProvider>();
         services.AddSingleton<IDataService, DataService>();
         services.AddSingleton<AuditLogService>();

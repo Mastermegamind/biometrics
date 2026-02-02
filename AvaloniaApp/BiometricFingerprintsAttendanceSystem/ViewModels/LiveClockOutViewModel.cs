@@ -21,6 +21,8 @@ public class LiveClockOutViewModel : ViewModelBase
     private string _clockOutTime = string.Empty;
     private string _duration = string.Empty;
     private string _statusMessage = "Place your finger on the scanner to clock out";
+    private string _templateCacheStatus = "Templates: not cached";
+    private string _templateCacheLastRefresh = "Last refresh: --";
     private bool _isProcessing;
     private bool _isSuccess;
     private bool _showResult;
@@ -36,6 +38,7 @@ public class LiveClockOutViewModel : ViewModelBase
 
         // Auto-start scanning when view is loaded
         _ = StartScanningAsync();
+        UpdateTemplateCacheIndicators();
     }
 
     // ==================== Properties ====================
@@ -92,6 +95,18 @@ public class LiveClockOutViewModel : ViewModelBase
     {
         get => _statusMessage;
         set => SetProperty(ref _statusMessage, value);
+    }
+
+    public string TemplateCacheStatus
+    {
+        get => _templateCacheStatus;
+        set => SetProperty(ref _templateCacheStatus, value);
+    }
+
+    public string TemplateCacheLastRefresh
+    {
+        get => _templateCacheLastRefresh;
+        set => SetProperty(ref _templateCacheLastRefresh, value);
     }
 
     public bool IsProcessing
@@ -198,14 +213,51 @@ public class LiveClockOutViewModel : ViewModelBase
                 return;
             }
 
-            // Send to API/local for clock-out
             var clockOutRequest = new ClockOutRequest
             {
                 FingerprintTemplate = templateData,
                 Timestamp = LagosTime.Now
             };
 
-            var result = await _services.Data.ClockOutAsync(clockOutRequest);
+            ClockOutResponse result;
+            var useOnlineMatcher = _services.Data.Mode == SyncMode.OnlineOnly ||
+                                   _services.Data.Mode == SyncMode.OnlineFirst;
+
+            if (useOnlineMatcher)
+            {
+                var matchResult = await _services.OnlineMatcher.MatchAsync(templateData);
+                UpdateTemplateCacheIndicators();
+                if (matchResult.Success && matchResult.Data != null)
+                {
+                    var verifiedRequest = new VerifiedClockRequest
+                    {
+                        RegNo = matchResult.Data.RegNo,
+                        FingerIndex = matchResult.Data.FingerIndex,
+                        MatchScore = matchResult.Data.MatchScore,
+                        MatchFar = matchResult.Data.MatchFar,
+                        Timestamp = LagosTime.Now
+                    };
+
+                    result = await _services.OnlineData.ClockOutVerifiedAsync(verifiedRequest);
+                }
+                else if (_services.Data.Mode == SyncMode.OnlineFirst && matchResult.ErrorCode == "TEMPLATES_UNAVAILABLE")
+                {
+                    _logger.LogWarning("Online templates unavailable, falling back to offline clock-out");
+                    result = await _services.Data.ClockOutAsync(clockOutRequest);
+                }
+                else
+                {
+                    ShowResult = true;
+                    IsSuccess = false;
+                    StatusMessage = matchResult.Message ?? "Fingerprint not recognized. Please try again.";
+                    _logger.LogWarning("Live clock-out match failed: {Message}", matchResult.Message ?? "No match");
+                    return;
+                }
+            }
+            else
+            {
+                result = await _services.Data.ClockOutAsync(clockOutRequest);
+            }
 
             ShowResult = true;
 
@@ -293,10 +345,30 @@ public class LiveClockOutViewModel : ViewModelBase
         ShowResult = false;
         IsSuccess = false;
         StatusMessage = "Ready. Place your finger on the scanner...";
+        UpdateTemplateCacheIndicators();
 
         // Notify time properties changed
         OnPropertyChanged(nameof(CurrentDate));
         OnPropertyChanged(nameof(CurrentTime));
+    }
+
+    private void UpdateTemplateCacheIndicators()
+    {
+        if (_services.Data.Mode == SyncMode.OfflineOnly)
+        {
+            TemplateCacheStatus = "Templates: offline";
+            TemplateCacheLastRefresh = "Last refresh: --";
+            return;
+        }
+
+        var matcher = _services.OnlineMatcher;
+        TemplateCacheStatus = matcher.CachedTemplateCount > 0
+            ? $"Templates: cached ({matcher.CachedTemplateCount})"
+            : "Templates: not cached";
+
+        TemplateCacheLastRefresh = matcher.LastRefreshAt.HasValue
+            ? $"Last refresh: {matcher.LastRefreshAt.Value:HH:mm:ss}"
+            : "Last refresh: --";
     }
 
     private static string FormatDuration(TimeSpan duration)

@@ -240,6 +240,75 @@ public class OnlineDataProvider
     }
 
     /// <summary>
+    /// Get all enrolled fingerprint templates from API (for online matching).
+    /// </summary>
+    public async Task<DataResult<List<(string RegNo, List<FingerprintTemplate> Templates)>>> GetAllEnrollmentTemplatesAsync()
+    {
+        try
+        {
+            var path = BuildApiAllTemplatesPath(_config.EnrollmentTemplatesPath);
+            LogRequest("GET", path, null);
+            var response = await _http.GetAsync(path);
+            var body = await SafeReadResponseBodyAsync(response);
+            LogResponse(path, response, body);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                return DataResult<List<(string RegNo, List<FingerprintTemplate> Templates)>>.Fail($"API error: {response.StatusCode}");
+            }
+
+            var records = ParseEnrollmentRecords(body);
+            var grouped = new Dictionary<string, List<FingerprintTemplate>>(StringComparer.OrdinalIgnoreCase);
+            foreach (var record in records)
+            {
+                var base64 = string.IsNullOrWhiteSpace(record.TemplateData)
+                    ? record.Template
+                    : record.TemplateData;
+                if (string.IsNullOrWhiteSpace(base64))
+                {
+                    continue;
+                }
+
+                byte[]? bytes;
+                try
+                {
+                    bytes = Convert.FromBase64String(base64);
+                }
+                catch
+                {
+                    continue;
+                }
+
+                if (bytes.Length == 0 || string.IsNullOrWhiteSpace(record.RegNo))
+                {
+                    continue;
+                }
+
+                if (!grouped.TryGetValue(record.RegNo, out var list))
+                {
+                    list = new List<FingerprintTemplate>();
+                    grouped[record.RegNo] = list;
+                }
+
+                list.Add(new FingerprintTemplate
+                {
+                    FingerIndex = record.FingerIndex,
+                    Finger = record.FingerName ?? $"Finger {record.FingerIndex}",
+                    TemplateData = bytes
+                });
+            }
+
+            var results = grouped.Select(kvp => (kvp.Key, kvp.Value)).ToList();
+            return DataResult<List<(string RegNo, List<FingerprintTemplate> Templates)>>.Ok(results);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to get all enrollment templates");
+            return DataResult<List<(string RegNo, List<FingerprintTemplate> Templates)>>.Fail(ex.Message);
+        }
+    }
+
+    /// <summary>
     /// Submit enrollment.
     /// </summary>
     public async Task<DataResult> SubmitEnrollmentAsync(EnrollmentRequest request)
@@ -453,6 +522,133 @@ public class OnlineDataProvider
     }
 
     /// <summary>
+    /// Clock in with pre-verified fingerprint (client-side matching).
+    /// </summary>
+    public async Task<ClockInResponse> ClockInVerifiedAsync(VerifiedClockRequest request)
+    {
+        try
+        {
+            var payload = new ApiClockVerifiedRequest
+            {
+                RegNo = request.RegNo,
+                FingerIndex = request.FingerIndex,
+                MatchScore = request.MatchScore,
+                MatchFar = request.MatchFar,
+                Timestamp = request.Timestamp,
+                DeviceId = request.DeviceId
+            };
+
+            var path = "/api/attendance/clockin-verified";
+            var actualJson = JsonSerializer.Serialize(payload, _jsonOptions);
+            _logger.LogInformation("Clock-in verified JSON payload (first 300 chars): {Json}",
+                actualJson.Length > 300 ? actualJson[..300] + "..." : actualJson);
+
+            using var content = new StringContent(actualJson, Encoding.UTF8, "application/json");
+            var response = await _http.PostAsync(path, content);
+            var body = await SafeReadResponseBodyAsync(response);
+            _logger.LogInformation("Clock-in verified response: {StatusCode} - {Body}", (int)response.StatusCode, body);
+            var apiResponse = JsonSerializer.Deserialize<ApiClockInResponse>(body, _jsonOptions);
+
+            if (!response.IsSuccessStatusCode || apiResponse == null)
+            {
+                return new ClockInResponse
+                {
+                    Success = false,
+                    Message = apiResponse?.Message ?? "Clock-in failed"
+                };
+            }
+
+            return new ClockInResponse
+            {
+                Success = apiResponse.Success,
+                Message = apiResponse.Message,
+                Student = apiResponse.Student != null ? new StudentInfo
+                {
+                    RegNo = apiResponse.Student.RegNo ?? "",
+                    Name = apiResponse.Student.Name ?? "",
+                    ClassName = apiResponse.Student.ClassName ?? "",
+                    PassportUrl = apiResponse.Student.PassportUrl
+                } : null,
+                ClockInTime = apiResponse.ClockInTime,
+                AlreadyClockedIn = apiResponse.AlreadyClockedIn
+            };
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Clock-in verified API call failed");
+            return new ClockInResponse
+            {
+                Success = false,
+                Message = $"Network error: {ex.Message}"
+            };
+        }
+    }
+
+    /// <summary>
+    /// Clock out with pre-verified fingerprint (client-side matching).
+    /// </summary>
+    public async Task<ClockOutResponse> ClockOutVerifiedAsync(VerifiedClockRequest request)
+    {
+        try
+        {
+            var payload = new ApiClockVerifiedRequest
+            {
+                RegNo = request.RegNo,
+                FingerIndex = request.FingerIndex,
+                MatchScore = request.MatchScore,
+                MatchFar = request.MatchFar,
+                Timestamp = request.Timestamp,
+                DeviceId = request.DeviceId
+            };
+
+            var path = "/api/attendance/clockout-verified";
+            var actualJson = JsonSerializer.Serialize(payload, _jsonOptions);
+            _logger.LogInformation("Clock-out verified JSON payload (first 300 chars): {Json}",
+                actualJson.Length > 300 ? actualJson[..300] + "..." : actualJson);
+
+            using var content = new StringContent(actualJson, Encoding.UTF8, "application/json");
+            var response = await _http.PostAsync(path, content);
+            var body = await SafeReadResponseBodyAsync(response);
+            LogResponse(path, response, body);
+            var apiResponse = JsonSerializer.Deserialize<ApiClockOutResponse>(body, _jsonOptions);
+
+            if (!response.IsSuccessStatusCode || apiResponse == null)
+            {
+                return new ClockOutResponse
+                {
+                    Success = false,
+                    Message = apiResponse?.Message ?? "Clock-out failed"
+                };
+            }
+
+            return new ClockOutResponse
+            {
+                Success = apiResponse.Success,
+                Message = apiResponse.Message,
+                Student = apiResponse.Student != null ? new StudentInfo
+                {
+                    RegNo = apiResponse.Student.RegNo ?? "",
+                    Name = apiResponse.Student.Name ?? "",
+                    ClassName = apiResponse.Student.ClassName ?? ""
+                } : null,
+                ClockInTime = apiResponse.ClockInTime,
+                ClockOutTime = apiResponse.ClockOutTime,
+                Duration = apiResponse.Duration,
+                NotClockedIn = apiResponse.NotClockedIn
+            };
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Clock-out verified API call failed");
+            return new ClockOutResponse
+            {
+                Success = false,
+                Message = $"Network error: {ex.Message}"
+            };
+        }
+    }
+
+    /// <summary>
     /// Get attendance records.
     /// </summary>
     public async Task<DataResult<List<AttendanceRecord>>> GetAttendanceAsync(DateTime from, DateTime to, string? regNo = null)
@@ -628,6 +824,22 @@ public class OnlineDataProvider
         public string? DeviceId { get; init; }
     }
 
+    private record ApiClockVerifiedRequest
+    {
+        [JsonPropertyName("regNo")]
+        public string RegNo { get; init; } = "";
+        [JsonPropertyName("fingerIndex")]
+        public int? FingerIndex { get; init; }
+        [JsonPropertyName("matchScore")]
+        public int? MatchScore { get; init; }
+        [JsonPropertyName("matchFar")]
+        public double? MatchFar { get; init; }
+        [JsonPropertyName("timestamp")]
+        public DateTime Timestamp { get; init; }
+        [JsonPropertyName("deviceId")]
+        public string? DeviceId { get; init; }
+    }
+
     private record ApiClockOutResponse
     {
         public bool Success { get; init; }
@@ -732,6 +944,35 @@ public class OnlineDataProvider
 
         var sep = normalized.Contains('?') ? "&" : "?";
         return $"{normalized}{sep}regNo={encodedRegNo}";
+    }
+
+    private static string BuildApiAllTemplatesPath(string path)
+    {
+        var normalized = NormalizeApiPath(path);
+
+        if (normalized.Contains("{regNo}", StringComparison.OrdinalIgnoreCase))
+        {
+            normalized = normalized
+                .Replace("/{regNo}", "", StringComparison.OrdinalIgnoreCase)
+                .Replace("{regNo}", "", StringComparison.OrdinalIgnoreCase)
+                .TrimEnd('/');
+        }
+
+        var queryIndex = normalized.IndexOf('?', StringComparison.Ordinal);
+        if (queryIndex >= 0)
+        {
+            var basePath = normalized[..queryIndex];
+            var query = normalized[(queryIndex + 1)..];
+            var parts = query.Split('&', StringSplitOptions.RemoveEmptyEntries);
+            var filtered = parts.Where(p =>
+                !p.StartsWith("regNo=", StringComparison.OrdinalIgnoreCase) &&
+                !p.StartsWith("regno=", StringComparison.OrdinalIgnoreCase) &&
+                !p.Contains("{regNo}", StringComparison.OrdinalIgnoreCase));
+            var newQuery = string.Join("&", filtered);
+            return string.IsNullOrWhiteSpace(newQuery) ? basePath : $"{basePath}?{newQuery}";
+        }
+
+        return normalized;
     }
 
     private static string NormalizeApiPath(string path)

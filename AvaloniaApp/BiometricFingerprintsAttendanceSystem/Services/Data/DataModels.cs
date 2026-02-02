@@ -76,6 +76,19 @@ public record ClockOutRequest
 }
 
 /// <summary>
+/// Request to record a pre-verified clock-in/clock-out.
+/// </summary>
+public record VerifiedClockRequest
+{
+    public string RegNo { get; init; } = string.Empty;
+    public int? FingerIndex { get; init; }
+    public int? MatchScore { get; init; }
+    public double? MatchFar { get; init; }
+    public DateTime Timestamp { get; init; } = LagosTime.Now;
+    public string? DeviceId { get; init; }
+}
+
+/// <summary>
 /// Response from clock-out operation.
 /// </summary>
 public record ClockOutResponse

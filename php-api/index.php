@@ -465,6 +465,232 @@ try {
         ]);
     }
 
+    // POST /api/attendance/clockin-verified - Clock in with pre-verified fingerprint (client-side matching)
+    if ($path === 'attendance/clockin-verified' && $method === 'POST') {
+        $data = api_read_json_body();
+        if (!$data) {
+            api_send_json(['success' => false, 'message' => 'Invalid JSON payload'], 400);
+        }
+
+        $regNo = clean_input($data['regNo'] ?? $data['regno'] ?? '');
+        $fingerIndex = $data['fingerIndex'] ?? $data['finger_index'] ?? null;
+        $matchScore = $data['matchScore'] ?? $data['match_score'] ?? null;
+        $matchFar = $data['matchFar'] ?? $data['match_far'] ?? null;
+        $timestampRaw = $data['timestamp'] ?? null;
+        $deviceId = clean_input($data['deviceId'] ?? $data['device_id'] ?? '');
+
+        if ($regNo === '') {
+            api_send_json(['success' => false, 'message' => 'regNo is required'], 422);
+        }
+
+        $dt = is_string($timestampRaw) ? api_parse_datetime($timestampRaw, $tz) : null;
+        if (!$dt) {
+            $dt = new DateTimeImmutable('now', $tz);
+        }
+
+        $pdo = get_db_connection();
+        if (!$pdo) {
+            api_send_json(['success' => false, 'message' => 'Database connection failed'], 500);
+        }
+
+        // Verify student exists and get details
+        $stmt = $pdo->prepare("
+            SELECT s.name, c.name AS class_name, s.passport_path
+            FROM students s
+            LEFT JOIN classes c ON s.class_id = c.id
+            WHERE s.reg_no = ?
+            LIMIT 1
+        ");
+        $stmt->execute([$regNo]);
+        $student = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        if (!$student) {
+            api_send_json(['success' => false, 'message' => 'Student not found'], 404);
+        }
+
+        $studentName = $student['name'];
+        $className = $student['class_name'];
+        $passportPath = $student['passport_path'];
+
+        // Ensure attendance_records table exists
+        api_ensure_attendance_records_table($pdo);
+
+        $attendanceDate = $dt->format('Y-m-d');
+
+        // Check if already clocked in today
+        $stmt = $pdo->prepare("
+            SELECT id, time_in, time_out
+            FROM attendance_records
+            WHERE regno = ? AND date = ?
+            ORDER BY time_in DESC
+            LIMIT 1
+        ");
+        $stmt->execute([$regNo, $attendanceDate]);
+        $existing = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        $passportUrl = $passportPath
+            ? api_base_url() . '/uploads/' . ltrim($passportPath, '/')
+            : null;
+
+        if ($existing && $existing['time_in']) {
+            $clockInTime = $existing['time_in'];
+            api_send_json([
+                'success' => true,
+                'message' => 'Already clocked in',
+                'student' => [
+                    'regNo' => $regNo,
+                    'name' => $studentName,
+                    'className' => $className,
+                    'passportUrl' => $passportUrl,
+                ],
+                'clockInTime' => $clockInTime,
+                'alreadyClockedIn' => true,
+            ]);
+        }
+
+        // Insert new attendance record
+        $clockInTime = $dt->format('Y-m-d H:i:s');
+        $insert = $pdo->prepare("
+            INSERT INTO attendance_records
+            (regno, name, class_name, date, time_in, device_id, match_score, match_far, finger_index, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ");
+        $insert->execute([
+            $regNo,
+            $studentName,
+            $className,
+            $attendanceDate,
+            $clockInTime,
+            $deviceId !== '' ? $deviceId : null,
+            $matchScore,
+            $matchFar,
+            $fingerIndex,
+            $dt->format('Y-m-d H:i:s'),
+        ]);
+
+        api_send_json([
+            'success' => true,
+            'message' => 'Clock-in successful',
+            'student' => [
+                'regNo' => $regNo,
+                'name' => $studentName,
+                'className' => $className,
+                'passportUrl' => $passportUrl,
+            ],
+            'clockInTime' => $clockInTime,
+            'alreadyClockedIn' => false,
+        ]);
+    }
+
+    // POST /api/attendance/clockout-verified - Clock out with pre-verified fingerprint (client-side matching)
+    if ($path === 'attendance/clockout-verified' && $method === 'POST') {
+        $data = api_read_json_body();
+        if (!$data) {
+            api_send_json(['success' => false, 'message' => 'Invalid JSON payload'], 400);
+        }
+
+        $regNo = clean_input($data['regNo'] ?? $data['regno'] ?? '');
+        $fingerIndex = $data['fingerIndex'] ?? $data['finger_index'] ?? null;
+        $matchScore = $data['matchScore'] ?? $data['match_score'] ?? null;
+        $timestampRaw = $data['timestamp'] ?? null;
+        $deviceId = clean_input($data['deviceId'] ?? $data['device_id'] ?? '');
+
+        if ($regNo === '') {
+            api_send_json(['success' => false, 'message' => 'regNo is required'], 422);
+        }
+
+        $dt = is_string($timestampRaw) ? api_parse_datetime($timestampRaw, $tz) : null;
+        if (!$dt) {
+            $dt = new DateTimeImmutable('now', $tz);
+        }
+
+        $pdo = get_db_connection();
+        if (!$pdo) {
+            api_send_json(['success' => false, 'message' => 'Database connection failed'], 500);
+        }
+
+        // Verify student exists and get details
+        $stmt = $pdo->prepare("
+            SELECT s.name, c.name AS class_name
+            FROM students s
+            LEFT JOIN classes c ON s.class_id = c.id
+            WHERE s.reg_no = ?
+            LIMIT 1
+        ");
+        $stmt->execute([$regNo]);
+        $student = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        if (!$student) {
+            api_send_json(['success' => false, 'message' => 'Student not found'], 404);
+        }
+
+        $studentName = $student['name'];
+        $className = $student['class_name'];
+
+        // Ensure attendance_records table exists
+        api_ensure_attendance_records_table($pdo);
+
+        $attendanceDate = $dt->format('Y-m-d');
+
+        // Find open attendance record (clocked in but not out)
+        $stmt = $pdo->prepare("
+            SELECT id, time_in, time_out
+            FROM attendance_records
+            WHERE regno = ? AND date = ? AND time_out IS NULL
+            ORDER BY time_in DESC
+            LIMIT 1
+        ");
+        $stmt->execute([$regNo, $attendanceDate]);
+        $record = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        if (!$record) {
+            api_send_json([
+                'success' => true,
+                'message' => 'Not clocked in',
+                'student' => [
+                    'regNo' => $regNo,
+                    'name' => $studentName,
+                    'className' => $className,
+                ],
+                'clockInTime' => null,
+                'clockOutTime' => null,
+                'duration' => null,
+                'notClockedIn' => true,
+            ]);
+        }
+
+        // Update with clock out time
+        $clockOutTime = $dt->format('Y-m-d H:i:s');
+        $update = $pdo->prepare("
+            UPDATE attendance_records
+            SET time_out = ?, device_id = COALESCE(?, device_id)
+            WHERE id = ?
+        ");
+        $update->execute([
+            $clockOutTime,
+            $deviceId !== '' ? $deviceId : null,
+            (int)$record['id'],
+        ]);
+
+        $clockIn = new DateTimeImmutable($record['time_in'], $tz);
+        $clockOut = $dt;
+        $duration = api_duration_seconds($clockIn, $clockOut);
+
+        api_send_json([
+            'success' => true,
+            'message' => 'Clock-out successful',
+            'student' => [
+                'regNo' => $regNo,
+                'name' => $studentName,
+                'className' => $className,
+            ],
+            'clockInTime' => $record['time_in'],
+            'clockOutTime' => $clockOutTime,
+            'duration' => $duration,
+            'notClockedIn' => false,
+        ]);
+    }
+
     // GET /api/attendance - Get attendance records for a date range
     if ($path === 'attendance' && $method === 'GET') {
         $fromRaw = $_GET['from'] ?? '';

@@ -19,6 +19,8 @@ public class LiveClockInViewModel : ViewModelBase
     private Bitmap? _fingerprintImage;
     private string _clockInTime = string.Empty;
     private string _statusMessage = "Place your finger on the scanner to clock in";
+    private string _templateCacheStatus = "Templates: not cached";
+    private string _templateCacheLastRefresh = "Last refresh: --";
     private bool _isProcessing;
     private bool _isSuccess;
     private bool _showResult;
@@ -34,6 +36,7 @@ public class LiveClockInViewModel : ViewModelBase
 
         // Auto-start scanning when view is loaded
         _ = StartScanningAsync();
+        UpdateTemplateCacheIndicators();
     }
 
     // ==================== Properties ====================
@@ -78,6 +81,18 @@ public class LiveClockInViewModel : ViewModelBase
     {
         get => _statusMessage;
         set => SetProperty(ref _statusMessage, value);
+    }
+
+    public string TemplateCacheStatus
+    {
+        get => _templateCacheStatus;
+        set => SetProperty(ref _templateCacheStatus, value);
+    }
+
+    public string TemplateCacheLastRefresh
+    {
+        get => _templateCacheLastRefresh;
+        set => SetProperty(ref _templateCacheLastRefresh, value);
     }
 
     public bool IsProcessing
@@ -185,14 +200,51 @@ public class LiveClockInViewModel : ViewModelBase
                 return;
             }
 
-            // Send to API/local for clock-in
             var clockInRequest = new ClockInRequest
             {
                 FingerprintTemplate = templateData,
                 Timestamp = LagosTime.Now
             };
 
-            var result = await _services.Data.ClockInAsync(clockInRequest);
+            ClockInResponse result;
+            var useOnlineMatcher = _services.Data.Mode == SyncMode.OnlineOnly ||
+                                   _services.Data.Mode == SyncMode.OnlineFirst;
+
+            if (useOnlineMatcher)
+            {
+                var matchResult = await _services.OnlineMatcher.MatchAsync(templateData);
+                UpdateTemplateCacheIndicators();
+                if (matchResult.Success && matchResult.Data != null)
+                {
+                    var verifiedRequest = new VerifiedClockRequest
+                    {
+                        RegNo = matchResult.Data.RegNo,
+                        FingerIndex = matchResult.Data.FingerIndex,
+                        MatchScore = matchResult.Data.MatchScore,
+                        MatchFar = matchResult.Data.MatchFar,
+                        Timestamp = LagosTime.Now
+                    };
+
+                    result = await _services.OnlineData.ClockInVerifiedAsync(verifiedRequest);
+                }
+                else if (_services.Data.Mode == SyncMode.OnlineFirst && matchResult.ErrorCode == "TEMPLATES_UNAVAILABLE")
+                {
+                    _logger.LogWarning("Online templates unavailable, falling back to offline clock-in");
+                    result = await _services.Data.ClockInAsync(clockInRequest);
+                }
+                else
+                {
+                    ShowResult = true;
+                    IsSuccess = false;
+                    StatusMessage = matchResult.Message ?? "Fingerprint not recognized. Please try again.";
+                    _logger.LogWarning("Live clock-in match failed: {Message}", matchResult.Message ?? "No match");
+                    return;
+                }
+            }
+            else
+            {
+                result = await _services.Data.ClockInAsync(clockInRequest);
+            }
 
             ShowResult = true;
 
@@ -271,10 +323,30 @@ public class LiveClockInViewModel : ViewModelBase
         ShowResult = false;
         IsSuccess = false;
         StatusMessage = "Ready. Place your finger on the scanner...";
+        UpdateTemplateCacheIndicators();
 
         // Notify time properties changed
         OnPropertyChanged(nameof(CurrentDate));
         OnPropertyChanged(nameof(CurrentTime));
+    }
+
+    private void UpdateTemplateCacheIndicators()
+    {
+        if (_services.Data.Mode == SyncMode.OfflineOnly)
+        {
+            TemplateCacheStatus = "Templates: offline";
+            TemplateCacheLastRefresh = "Last refresh: --";
+            return;
+        }
+
+        var matcher = _services.OnlineMatcher;
+        TemplateCacheStatus = matcher.CachedTemplateCount > 0
+            ? $"Templates: cached ({matcher.CachedTemplateCount})"
+            : "Templates: not cached";
+
+        TemplateCacheLastRefresh = matcher.LastRefreshAt.HasValue
+            ? $"Last refresh: {matcher.LastRefreshAt.Value:HH:mm:ss}"
+            : "Last refresh: --";
     }
 }
 

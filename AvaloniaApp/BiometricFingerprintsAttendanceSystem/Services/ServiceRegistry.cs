@@ -26,6 +26,8 @@ public sealed class ServiceRegistry : IServiceRegistry
         Fingerprint = _provider.GetRequiredService<IFingerprintService>();
         Api = _provider.GetRequiredService<BiometricsApiClient>();
         DemoApi = _provider.GetService<DemoBiometricsApiClient>();
+        OnlineData = _provider.GetRequiredService<OnlineDataProvider>();
+        OnlineMatcher = _provider.GetRequiredService<OnlineTemplateMatcher>();
         Data = _provider.GetRequiredService<IDataService>();
         Audit = _provider.GetRequiredService<AuditLogService>();
         LoginAttempts = _provider.GetRequiredService<LoginAttemptRepository>();
@@ -44,6 +46,8 @@ public sealed class ServiceRegistry : IServiceRegistry
     public IFingerprintService Fingerprint { get; }
     public BiometricsApiClient Api { get; }
     public DemoBiometricsApiClient? DemoApi { get; }
+    public OnlineDataProvider OnlineData { get; }
+    public OnlineTemplateMatcher OnlineMatcher { get; }
     public IDataService Data { get; }
     public AuditLogService Audit { get; }
     public LoginAttemptRepository LoginAttempts { get; }

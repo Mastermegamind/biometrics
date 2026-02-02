@@ -582,16 +582,101 @@ public class DataService : IDataService
 
     private async Task<DataResult> SyncClockInAsync(PendingSyncRecord record)
     {
-        // For clock-in sync, we just need to record that it happened
-        // The fingerprint verification was already done locally
         _logger.LogInformation("Syncing clock-in record: {Payload}", record.JsonPayload);
-        // API would need an endpoint to record pre-verified attendance
-        return DataResult.Ok("Clock-in synced");
+        try
+        {
+            using var doc = JsonDocument.Parse(record.JsonPayload);
+            var root = doc.RootElement;
+            var regNo = ReadStringProperty(root, "RegNo", "regNo");
+            var deviceId = ReadStringProperty(root, "DeviceId", "deviceId");
+            var timestamp = ReadDateTimeProperty(root, "Timestamp", "timestamp") ?? DateTime.Now;
+
+            if (string.IsNullOrWhiteSpace(regNo))
+            {
+                return DataResult.Fail("Missing regNo in sync payload");
+            }
+
+            var response = await _online.ClockInVerifiedAsync(new VerifiedClockRequest
+            {
+                RegNo = regNo,
+                Timestamp = timestamp,
+                DeviceId = deviceId
+            });
+
+            return response.Success
+                ? DataResult.Ok("Clock-in synced")
+                : DataResult.Fail(response.Message ?? "Clock-in sync failed");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to sync clock-in record");
+            return DataResult.Fail(ex.Message);
+        }
     }
 
     private async Task<DataResult> SyncClockOutAsync(PendingSyncRecord record)
     {
         _logger.LogInformation("Syncing clock-out record: {Payload}", record.JsonPayload);
-        return DataResult.Ok("Clock-out synced");
+        try
+        {
+            using var doc = JsonDocument.Parse(record.JsonPayload);
+            var root = doc.RootElement;
+            var regNo = ReadStringProperty(root, "RegNo", "regNo");
+            var deviceId = ReadStringProperty(root, "DeviceId", "deviceId");
+            var timestamp = ReadDateTimeProperty(root, "Timestamp", "timestamp") ?? DateTime.Now;
+
+            if (string.IsNullOrWhiteSpace(regNo))
+            {
+                return DataResult.Fail("Missing regNo in sync payload");
+            }
+
+            var response = await _online.ClockOutVerifiedAsync(new VerifiedClockRequest
+            {
+                RegNo = regNo,
+                Timestamp = timestamp,
+                DeviceId = deviceId
+            });
+
+            return response.Success
+                ? DataResult.Ok("Clock-out synced")
+                : DataResult.Fail(response.Message ?? "Clock-out sync failed");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to sync clock-out record");
+            return DataResult.Fail(ex.Message);
+        }
+    }
+
+    private static string? ReadStringProperty(JsonElement root, string camel, string lower)
+    {
+        if (root.TryGetProperty(camel, out var prop) && prop.ValueKind == JsonValueKind.String)
+        {
+            return prop.GetString();
+        }
+        if (root.TryGetProperty(lower, out prop) && prop.ValueKind == JsonValueKind.String)
+        {
+            return prop.GetString();
+        }
+        return null;
+    }
+
+    private static DateTime? ReadDateTimeProperty(JsonElement root, string camel, string lower)
+    {
+        if (root.TryGetProperty(camel, out var prop) && prop.ValueKind == JsonValueKind.String)
+        {
+            if (DateTime.TryParse(prop.GetString(), out var dt))
+            {
+                return dt;
+            }
+        }
+        if (root.TryGetProperty(lower, out prop) && prop.ValueKind == JsonValueKind.String)
+        {
+            if (DateTime.TryParse(prop.GetString(), out var dt))
+            {
+                return dt;
+            }
+        }
+        return null;
     }
 }

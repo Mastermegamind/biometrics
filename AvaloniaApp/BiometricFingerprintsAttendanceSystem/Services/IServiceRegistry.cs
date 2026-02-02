@@ -20,6 +20,8 @@ public interface IServiceRegistry
     IFingerprintService Fingerprint { get; }
     BiometricsApiClient Api { get; }
     DemoBiometricsApiClient? DemoApi { get; }
+    OnlineDataProvider OnlineData { get; }
+    OnlineTemplateMatcher OnlineMatcher { get; }
     IDataService Data { get; }
     AuditLogService Audit { get; }
     LoginAttemptRepository LoginAttempts { get; }
