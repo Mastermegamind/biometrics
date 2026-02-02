@@ -27,7 +27,11 @@
     <PackageReference Include="Microsoft.Extensions.Logging.Console" Version="8.0.0" />
   </ItemGroup>
 
-  <!-- Windows-only fingerprint SDKs: enable by setting IncludeFingerprintSdks=true and providing SDK paths. -->
+  <!-- Windows-only fingerprint SDKs: enable by setting IncludeFingerprintSdks=true -->
+  <PropertyGroup Condition="'$(IncludeFingerprintSdks)' == 'true'">
+    <!-- Default SDK path if not provided externally -->
+    <DigitalPersonaSdkPath Condition="'$(DigitalPersonaSdkPath)' == ''">C:\Program Files\DigitalPersona\One Touch SDK\.NET\Bin</DigitalPersonaSdkPath>
+  </PropertyGroup>
   <PropertyGroup Condition="'$(IncludeFingerprintSdks)' == 'true'">
     <DefineConstants>$(DefineConstants);DIGITALPERSONA_SDK</DefineConstants>
     <UseWindowsForms>true</UseWindowsForms>

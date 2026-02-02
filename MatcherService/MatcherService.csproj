@@ -12,6 +12,8 @@
   </ItemGroup>
 
   <PropertyGroup Condition="'$(IncludeFingerprintSdks)' == 'true'">
+    <!-- Default SDK path if not provided externally -->
+    <DigitalPersonaSdkPath Condition="'$(DigitalPersonaSdkPath)' == ''">C:\Program Files\DigitalPersona\One Touch SDK\.NET\Bin</DigitalPersonaSdkPath>
     <DefineConstants>$(DefineConstants);DIGITALPERSONA_SDK</DefineConstants>
     <UseWindowsForms>true</UseWindowsForms>
   </PropertyGroup>

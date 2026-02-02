@@ -4,7 +4,9 @@
       "Bash(dotnet clean:*)",
       "Bash(dotnet run:*)",
       "Bash(dotnet build:*)",
-      "Bash(powershell:*)"
+      "Bash(powershell:*)",
+      "Bash(echo:*)",
+      "Bash(Select-Object -First 3 FullName)"
     ]
   }
 }
