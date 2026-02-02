@@ -207,14 +207,13 @@ public class OnlineDataProvider
                     continue;
                 }
 
-                byte[]? bytes;
-                try
-                {
-                    bytes = Convert.FromBase64String(base64);
-                }
-                catch
+                if (!TryDecodeTemplate(base64, out var bytes, out var doubleDecoded))
                 {
                     continue;
+                }
+                if (doubleDecoded)
+                {
+                    _logger.LogWarning("Template base64 appears double-encoded for RegNo {RegNo} finger {Finger}", record.RegNo, record.FingerIndex);
                 }
 
                 if (bytes.Length == 0)
@@ -278,17 +277,16 @@ public class OnlineDataProvider
                     continue;
                 }
 
-                byte[]? bytes;
-                try
-                {
-                    bytes = Convert.FromBase64String(base64);
-                }
-                catch (FormatException ex)
+                if (!TryDecodeTemplate(base64, out var bytes, out var doubleDecoded))
                 {
                     skippedDecode++;
-                    _logger.LogWarning("Skipping record {RegNo} finger {Finger}: base64 decode failed - {Error} (first 50 chars: {Sample})",
-                        record.RegNo, record.FingerIndex, ex.Message, base64.Length > 50 ? base64[..50] : base64);
+                    _logger.LogWarning("Skipping record {RegNo} finger {Finger}: base64 decode failed (first 50 chars: {Sample})",
+                        record.RegNo, record.FingerIndex, base64.Length > 50 ? base64[..50] : base64);
                     continue;
+                }
+                if (doubleDecoded)
+                {
+                    _logger.LogWarning("Template base64 appears double-encoded for RegNo {RegNo} finger {Finger}", record.RegNo, record.FingerIndex);
                 }
 
                 if (bytes.Length == 0 || string.IsNullOrWhiteSpace(record.RegNo))
@@ -751,6 +749,69 @@ public class OnlineDataProvider
         return "any";
     }
 
+    private bool TryDecodeTemplate(string base64, out byte[] bytes, out bool doubleDecoded)
+    {
+        bytes = Array.Empty<byte>();
+        doubleDecoded = false;
+
+        if (string.IsNullOrWhiteSpace(base64))
+        {
+            return false;
+        }
+
+        try
+        {
+            bytes = Convert.FromBase64String(base64);
+        }
+        catch
+        {
+            return false;
+        }
+
+        if (LooksLikeBase64Text(bytes))
+        {
+            try
+            {
+                var text = Encoding.ASCII.GetString(bytes);
+                var decoded = Convert.FromBase64String(text);
+                if (decoded.Length > 32)
+                {
+                    bytes = decoded;
+                    doubleDecoded = true;
+                }
+            }
+            catch
+            {
+                // Keep single decode
+            }
+        }
+
+        return bytes.Length > 0;
+    }
+
+    private static bool LooksLikeBase64Text(byte[] bytes)
+    {
+        if (bytes.Length == 0 || bytes.Length % 4 != 0)
+        {
+            return false;
+        }
+
+        foreach (var b in bytes)
+        {
+            var c = (char)b;
+            var isBase64Char = (c >= 'A' && c <= 'Z')
+                               || (c >= 'a' && c <= 'z')
+                               || (c >= '0' && c <= '9')
+                               || c == '+' || c == '/' || c == '=';
+            if (!isBase64Char)
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
     // ==================== API DTOs ====================
 
     private record ApiStudentEnvelope
@@ -814,7 +875,76 @@ public class OnlineDataProvider
         [JsonPropertyName("image_preview_data")]
         public string? ImagePreviewData { get; init; }
         [JsonPropertyName("captured_at")]
-        public DateTime CapturedAt { get; init; }
+        [JsonConverter(typeof(FlexibleDateTimeConverter))]
+        public DateTime? CapturedAt { get; init; }
+    }
+
+    private sealed class FlexibleDateTimeConverter : JsonConverter<DateTime?>
+    {
+        public override DateTime? Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+        {
+            if (reader.TokenType == JsonTokenType.Null)
+            {
+                return null;
+            }
+
+            if (reader.TokenType == JsonTokenType.String)
+            {
+                var text = reader.GetString();
+                if (string.IsNullOrWhiteSpace(text))
+                {
+                    return null;
+                }
+
+                if (DateTimeOffset.TryParse(text, out var dto))
+                {
+                    return dto.DateTime;
+                }
+
+                if (DateTime.TryParse(text, out var dt))
+                {
+                    return dt;
+                }
+
+                return null;
+            }
+
+            if (reader.TokenType == JsonTokenType.Number)
+            {
+                if (reader.TryGetInt64(out var value))
+                {
+                    var isMilliseconds = Math.Abs(value) > 9999999999;
+                    var dto = isMilliseconds
+                        ? DateTimeOffset.FromUnixTimeMilliseconds(value)
+                        : DateTimeOffset.FromUnixTimeSeconds(value);
+                    return dto.DateTime;
+                }
+
+                if (reader.TryGetDouble(out var dbl))
+                {
+                    var longValue = (long)dbl;
+                    var isMilliseconds = Math.Abs(longValue) > 9999999999;
+                    var dto = isMilliseconds
+                        ? DateTimeOffset.FromUnixTimeMilliseconds(longValue)
+                        : DateTimeOffset.FromUnixTimeSeconds(longValue);
+                    return dto.DateTime;
+                }
+            }
+
+            return null;
+        }
+
+        public override void Write(Utf8JsonWriter writer, DateTime? value, JsonSerializerOptions options)
+        {
+            if (value.HasValue)
+            {
+                writer.WriteStringValue(value.Value);
+            }
+            else
+            {
+                writer.WriteNullValue();
+            }
+        }
     }
 
     private record ApiClockInRequest

@@ -243,6 +243,52 @@ function api_is_valid_base64(?string $data): bool {
     return $decoded !== false && $decoded !== '';
 }
 
+function api_is_base64_bytes(string $bytes): bool {
+    if ($bytes === '') {
+        return false;
+    }
+    if (strlen($bytes) % 4 !== 0) {
+        return false;
+    }
+    if (preg_match('/[^A-Za-z0-9+\/=]/', $bytes)) {
+        return false;
+    }
+    $decoded = base64_decode($bytes, true);
+    return $decoded !== false && $decoded !== '';
+}
+
+function api_decode_template_base64(string $templateBase64): ?string {
+    $decoded = base64_decode($templateBase64, true);
+    if ($decoded === false || $decoded === '') {
+        return null;
+    }
+
+    if (api_is_base64_bytes($decoded)) {
+        $decoded2 = base64_decode($decoded, true);
+        if ($decoded2 !== false && $decoded2 !== '' && strlen($decoded2) > 32) {
+            return $decoded2;
+        }
+    }
+
+    return $decoded;
+}
+
+/**
+ * Normalize template data to a single base64 string (avoid double-encoding).
+ *
+ * @param string|null $templateBlob Raw DB blob (may already be base64 text)
+ * @param string|null $templateData Base64 stored in DB (preferred)
+ */
+function api_normalize_template_base64(?string $templateBlob, ?string $templateData): string {
+    if (api_is_valid_base64($templateData)) {
+        return $templateData;
+    }
+    if (api_is_valid_base64($templateBlob)) {
+        return $templateBlob;
+    }
+    return base64_encode($templateBlob ?? '');
+}
+
 /**
  * Get fingerprint storage directory path
  */
@@ -382,12 +428,13 @@ function api_get_fingerprint_enrollments(PDO $pdo, string $regNo): array {
 
     $records = [];
     while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
+        $templateBase64 = api_normalize_template_base64($row['template'] ?? null, $row['template_data'] ?? null);
         $records[] = [
             'regno' => $row['reg_no'],
             'finger_index' => (int)$row['finger_index'],
             'finger_name' => $row['finger_name'],
-            'template' => base64_encode($row['template']),
-            'template_data' => $row['template_data'],
+            'template' => $templateBase64,
+            'template_data' => $templateBase64,
             'image_preview' => $row['image_preview'],
             'captured_at' => $row['captured_at'],
         ];
@@ -412,12 +459,13 @@ function api_get_all_fingerprint_enrollments(PDO $pdo): array {
 
     $records = [];
     while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
+        $templateBase64 = api_normalize_template_base64($row['template'] ?? null, $row['template_data'] ?? null);
         $records[] = [
             'regno' => $row['reg_no'],
             'finger_index' => (int)$row['finger_index'],
             'finger_name' => $row['finger_name'],
-            'template' => base64_encode($row['template']),
-            'template_data' => $row['template_data'],
+            'template' => $templateBase64,
+            'template_data' => $templateBase64,
             'image_preview' => $row['image_preview'],
             'captured_at' => $row['captured_at'],
         ];
@@ -473,8 +521,8 @@ function api_ensure_attendance_records_table(PDO $pdo): void {
  * @return array|null Match result or null if no match
  */
 function api_match_fingerprint(PDO $pdo, string $templateBase64, ?string $matcherServiceUrl = null, ?string $regNoFilter = null): ?array {
-    $rawBytes = base64_decode($templateBase64, true);
-    if ($rawBytes === false) {
+    $rawBytes = api_decode_template_base64($templateBase64);
+    if ($rawBytes === null) {
         return null;
     }
 

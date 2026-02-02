@@ -4,6 +4,7 @@ using BiometricFingerprintsAttendanceSystem.Services.Db;
 using BiometricFingerprintsAttendanceSystem.Services.Fingerprint;
 using BiometricFingerprintsAttendanceSystem.Services.Time;
 using System.Security.Cryptography;
+using System.Text.Json;
 
 namespace BiometricFingerprintsAttendanceSystem.Services.Data;
 
@@ -27,6 +28,7 @@ public sealed class OnlineTemplateSync : IDisposable
 
     private const string TemplateCacheKey = "all_fingerprint_templates_cache";
     private const string LocalHashCacheKey = "local_template_hashes";
+    private const string TemplateDiskCacheFileName = "templates_cache.json";
 
     public DateTime? LastSyncAt { get; private set; }
     public int CachedStudentCount { get; private set; }
@@ -182,6 +184,7 @@ public sealed class OnlineTemplateSync : IDisposable
             if (newCount > 0 || updatedCount > 0)
             {
                 _cache.Remove(TemplateCacheKey);
+                DeleteTemplateDiskCache();
                 _logger.LogInformation(
                     "Smart sync completed: {New} new, {Updated} updated, {Skipped} unchanged",
                     newCount, updatedCount, skippedCount);
@@ -303,6 +306,18 @@ public sealed class OnlineTemplateSync : IDisposable
             return cached;
         }
 
+        var diskCached = TryLoadTemplateDiskCache();
+        if (diskCached != null && diskCached.Count > 0)
+        {
+            _cache.Set(TemplateCacheKey, diskCached, TimeSpan.FromMinutes(2));
+            CachedTemplateCount = diskCached.Count;
+            CachedStudentCount = diskCached.Select(t => t.RegNo)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .Count();
+            _logger.LogInformation("Loaded {Count} templates from disk cache", diskCached.Count);
+            return diskCached;
+        }
+
         var templates = new List<CachedTemplate>();
 
         try
@@ -340,8 +355,12 @@ public sealed class OnlineTemplateSync : IDisposable
             // Cache for 2 minutes
             _cache.Set(TemplateCacheKey, templates, TimeSpan.FromMinutes(2));
             CachedTemplateCount = templates.Count;
+            CachedStudentCount = templates.Select(t => t.RegNo)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .Count();
 
             _logger.LogDebug("Loaded {Count} templates into memory cache", templates.Count);
+            SaveTemplateDiskCache(templates);
         }
         catch (Exception ex)
         {
@@ -405,6 +424,8 @@ public sealed class OnlineTemplateSync : IDisposable
         _cache.Remove(TemplateCacheKey);
         _cache.Remove(LocalHashCacheKey);
         CachedTemplateCount = 0;
+        CachedStudentCount = 0;
+        DeleteTemplateDiskCache();
     }
 
     private async Task RunBackgroundSyncAsync(TimeSpan interval, CancellationToken ct)
@@ -525,6 +546,84 @@ public sealed class OnlineTemplateSync : IDisposable
         10 => "left-pinky",
         _ => $"finger-{index}"
     };
+
+    private string GetTemplateDiskCachePath()
+    {
+        var baseDir = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+        var cacheDir = Path.Combine(baseDir, "BiometricFingerprintsAttendanceSystem", "cache");
+        return Path.Combine(cacheDir, TemplateDiskCacheFileName);
+    }
+
+    private List<CachedTemplate>? TryLoadTemplateDiskCache()
+    {
+        try
+        {
+            var path = GetTemplateDiskCachePath();
+            if (!File.Exists(path))
+            {
+                return null;
+            }
+
+            var json = File.ReadAllText(path);
+            if (string.IsNullOrWhiteSpace(json))
+            {
+                return null;
+            }
+
+            var templates = JsonSerializer.Deserialize<List<CachedTemplate>>(json, new JsonSerializerOptions
+            {
+                PropertyNameCaseInsensitive = true
+            });
+
+            if (templates != null && templates.Count > 0 && !LastSyncAt.HasValue)
+            {
+                LastSyncAt = File.GetLastWriteTime(path);
+            }
+
+            return templates;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to read template disk cache");
+            return null;
+        }
+    }
+
+    private void SaveTemplateDiskCache(List<CachedTemplate> templates)
+    {
+        try
+        {
+            var path = GetTemplateDiskCachePath();
+            var dir = Path.GetDirectoryName(path);
+            if (!string.IsNullOrWhiteSpace(dir))
+            {
+                Directory.CreateDirectory(dir);
+            }
+
+            var json = JsonSerializer.Serialize(templates);
+            File.WriteAllText(path, json);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to write template disk cache");
+        }
+    }
+
+    private void DeleteTemplateDiskCache()
+    {
+        try
+        {
+            var path = GetTemplateDiskCachePath();
+            if (File.Exists(path))
+            {
+                File.Delete(path);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to delete template disk cache");
+        }
+    }
 
     public void Dispose()
     {

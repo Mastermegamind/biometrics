@@ -1,4 +1,5 @@
 using System.Windows.Input;
+using System.Text;
 using Avalonia.Media.Imaging;
 using BiometricFingerprintsAttendanceSystem.Services;
 using BiometricFingerprintsAttendanceSystem.Services.Data;
@@ -213,6 +214,8 @@ public class LiveClockOutViewModel : ViewModelBase
                 return;
             }
 
+            SaveClockOutTemplate(templateData, "unknown", "captured");
+
             var clockOutRequest = new ClockOutRequest
             {
                 FingerprintTemplate = templateData,
@@ -227,6 +230,7 @@ public class LiveClockOutViewModel : ViewModelBase
 
             if (authResult.Success && !string.IsNullOrEmpty(authResult.RegNo))
             {
+                SaveClockOutTemplate(templateData, authResult.RegNo, "localcache");
                 _logger.LogInformation(
                     "Local cache auth success: RegNo={RegNo} Score={Score} FAR={FAR}",
                     authResult.RegNo, authResult.MatchScore, authResult.MatchFar);
@@ -264,6 +268,7 @@ public class LiveClockOutViewModel : ViewModelBase
 
                 if (matchResult.Success && matchResult.Data != null)
                 {
+                    SaveClockOutTemplate(templateData, matchResult.Data.RegNo, "onlinematcher");
                     var verifiedRequest = new VerifiedClockRequest
                     {
                         RegNo = matchResult.Data.RegNo,
@@ -408,6 +413,47 @@ public class LiveClockOutViewModel : ViewModelBase
             return $"{(int)duration.TotalHours}h {duration.Minutes}m";
         }
         return $"{duration.Minutes}m {duration.Seconds}s";
+    }
+
+    private void SaveClockOutTemplate(byte[] templateData, string regNo, string source)
+    {
+        try
+        {
+            var baseDir = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+            var dir = Path.Combine(baseDir, "BiometricFingerprintsAttendanceSystem", "cache", "clockout-templates");
+            Directory.CreateDirectory(dir);
+
+            var safeRegNo = SanitizeFileName(regNo);
+            var timestamp = LagosTime.Now.ToString("yyyyMMdd_HHmmss_fff");
+            var baseName = $"clockout_{timestamp}_{source}_{safeRegNo}_{templateData.Length}b";
+            var binPath = Path.Combine(dir, $"{baseName}.bin");
+            var b64Path = Path.Combine(dir, $"{baseName}.b64");
+
+            File.WriteAllBytes(binPath, templateData);
+            File.WriteAllText(b64Path, Convert.ToBase64String(templateData), Encoding.ASCII);
+
+            _logger.LogInformation("Saved clock-out template to {BinPath}", binPath);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to save clock-out template to disk");
+        }
+    }
+
+    private static string SanitizeFileName(string value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return "unknown";
+        }
+
+        var invalid = Path.GetInvalidFileNameChars();
+        var builder = new StringBuilder(value.Length);
+        foreach (var ch in value)
+        {
+            builder.Append(invalid.Contains(ch) ? '_' : ch);
+        }
+        return builder.ToString();
     }
 }
 

@@ -1,4 +1,5 @@
 using System.Windows.Input;
+using System.Text;
 using Avalonia.Media.Imaging;
 using BiometricFingerprintsAttendanceSystem.Services;
 using BiometricFingerprintsAttendanceSystem.Services.Data;
@@ -200,6 +201,8 @@ public class LiveClockInViewModel : ViewModelBase
                 return;
             }
 
+            SaveClockInTemplate(templateData, "unknown", "captured");
+
             var clockInRequest = new ClockInRequest
             {
                 FingerprintTemplate = templateData,
@@ -214,6 +217,7 @@ public class LiveClockInViewModel : ViewModelBase
 
             if (authResult.Success && !string.IsNullOrEmpty(authResult.RegNo))
             {
+                SaveClockInTemplate(templateData, authResult.RegNo, "localcache");
                 _logger.LogInformation(
                     "Local cache auth success: RegNo={RegNo} Score={Score} FAR={FAR}",
                     authResult.RegNo, authResult.MatchScore, authResult.MatchFar);
@@ -251,6 +255,7 @@ public class LiveClockInViewModel : ViewModelBase
 
                 if (matchResult.Success && matchResult.Data != null)
                 {
+                    SaveClockInTemplate(templateData, matchResult.Data.RegNo, "onlinematcher");
                     var verifiedRequest = new VerifiedClockRequest
                     {
                         RegNo = matchResult.Data.RegNo,
@@ -334,6 +339,47 @@ public class LiveClockInViewModel : ViewModelBase
         {
             IsProcessing = false;
         }
+    }
+
+    private void SaveClockInTemplate(byte[] templateData, string regNo, string source)
+    {
+        try
+        {
+            var baseDir = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+            var dir = Path.Combine(baseDir, "BiometricFingerprintsAttendanceSystem", "cache", "clockin-templates");
+            Directory.CreateDirectory(dir);
+
+            var safeRegNo = SanitizeFileName(regNo);
+            var timestamp = LagosTime.Now.ToString("yyyyMMdd_HHmmss_fff");
+            var baseName = $"clockin_{timestamp}_{source}_{safeRegNo}_{templateData.Length}b";
+            var binPath = Path.Combine(dir, $"{baseName}.bin");
+            var b64Path = Path.Combine(dir, $"{baseName}.b64");
+
+            File.WriteAllBytes(binPath, templateData);
+            File.WriteAllText(b64Path, Convert.ToBase64String(templateData), Encoding.ASCII);
+
+            _logger.LogInformation("Saved clock-in template to {BinPath}", binPath);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to save clock-in template to disk");
+        }
+    }
+
+    private static string SanitizeFileName(string value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return "unknown";
+        }
+
+        var invalid = Path.GetInvalidFileNameChars();
+        var builder = new StringBuilder(value.Length);
+        foreach (var ch in value)
+        {
+            builder.Append(invalid.Contains(ch) ? '_' : ch);
+        }
+        return builder.ToString();
     }
 
     private void Reset()

@@ -188,8 +188,8 @@ try {
                 }
                 $seenFingers[$finger] = true;
 
-                $rawBytes = base64_decode($templateBase64, true);
-                if ($rawBytes === false) {
+                $rawBytes = api_decode_template_base64($templateBase64);
+                if ($rawBytes === null) {
                     throw new RuntimeException('Invalid templateBase64');
                 }
 
@@ -812,7 +812,10 @@ try {
                 if (!api_is_valid_base64($templateBase64)) {
                     throw new RuntimeException('Invalid base64 template');
                 }
-                $decodedTemplate = base64_decode($templateBase64, true);
+                $decodedTemplate = api_decode_template_base64($templateBase64);
+                if ($decodedTemplate === null) {
+                    throw new RuntimeException('Invalid base64 template');
+                }
 
                 // Validate decoded byte count if provided
                 if ($expectedByteCount !== null && is_numeric($expectedByteCount)) {
