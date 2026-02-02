@@ -73,11 +73,13 @@ CREATE TABLE IF NOT EXISTS fingerprint_enrollments (
   finger_name VARCHAR(32) NOT NULL,
   template LONGBLOB NOT NULL,
   template_data LONGTEXT NULL,
+  template_hash VARCHAR(64) NULL COMMENT 'SHA256 hash for smart sync change detection',
   image_preview VARCHAR(255) NULL,
   captured_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (id),
   UNIQUE KEY uq_regno_finger (regno, finger_index),
   KEY idx_fingerprint_regno (regno),
+  KEY idx_template_hash (template_hash),
   CONSTRAINT fk_enroll_student FOREIGN KEY (regno) REFERENCES students(regno) ON DELETE CASCADE ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 

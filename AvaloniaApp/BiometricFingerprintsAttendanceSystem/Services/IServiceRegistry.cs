@@ -22,6 +22,7 @@ public interface IServiceRegistry
     DemoBiometricsApiClient? DemoApi { get; }
     OnlineDataProvider OnlineData { get; }
     OnlineTemplateMatcher OnlineMatcher { get; }
+    OnlineTemplateSync TemplateSync { get; }
     IDataService Data { get; }
     AuditLogService Audit { get; }
     LoginAttemptRepository LoginAttempts { get; }

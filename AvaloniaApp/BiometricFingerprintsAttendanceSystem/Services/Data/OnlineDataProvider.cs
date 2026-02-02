@@ -240,13 +240,14 @@ public class OnlineDataProvider
     }
 
     /// <summary>
-    /// Get all enrolled fingerprint templates from API (for online matching).
+    /// Get all enrolled fingerprint templates from API (for online matching/sync).
     /// </summary>
     public async Task<DataResult<List<(string RegNo, List<FingerprintTemplate> Templates)>>> GetAllEnrollmentTemplatesAsync()
     {
         try
         {
-            var path = BuildApiAllTemplatesPath(_config.EnrollmentTemplatesPath);
+            // Use dedicated endpoint for fetching all templates
+            var path = "/api/enrollments/templates/all";
             LogRequest("GET", path, null);
             var response = await _http.GetAsync(path);
             var body = await SafeReadResponseBodyAsync(response);

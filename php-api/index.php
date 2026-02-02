@@ -893,6 +893,24 @@ try {
         ], 201);
     }
 
+    // GET /api/enrollments/templates/all - Get all templates for all students (for sync)
+    if ($path === 'enrollments/templates/all' && $method === 'GET') {
+        $pdo = get_db_connection();
+        if (!$pdo) {
+            api_send_json(['success' => false, 'message' => 'Database connection failed'], 500);
+        }
+
+        // Ensure table exists
+        api_ensure_fingerprint_enrollments_table($pdo);
+
+        $records = api_get_all_fingerprint_enrollments($pdo);
+
+        api_send_json([
+            'success' => true,
+            'records' => $records
+        ]);
+    }
+
     // GET /api/enrollments/templates?regno=... - Get templates for a student
     if ($path === 'enrollments/templates' && $method === 'GET') {
         // Accept both 'regno' and 'regNo' (camelCase from C# client)

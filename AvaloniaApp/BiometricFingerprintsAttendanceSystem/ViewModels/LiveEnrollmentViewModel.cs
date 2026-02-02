@@ -372,12 +372,21 @@ public class LiveEnrollmentViewModel : ViewModelBase
                 return;
             }
 
-            // Create template from captured sample (or use capture template if available)
-            var templateData = captureResult.TemplateData;
-            if (templateData == null || templateData.Length == 0)
+            // Create proper template from captured sample for enrollment storage
+            // Always use CreateTemplateAsync when sample data is available to ensure proper Template format
+            byte[]? templateData = null;
+            if (captureResult.SampleData is { Length: > 0 })
             {
                 templateData = await _services.Fingerprint.CreateTemplateAsync(captureResult.SampleData);
             }
+            // Fall back to capture's TemplateData only if CreateTemplateAsync didn't produce a result
+            if ((templateData == null || templateData.Length == 0) &&
+                captureResult.TemplateData is { Length: > 0 })
+            {
+                templateData = captureResult.TemplateData;
+                _logger.LogWarning("Live enrollment using capture TemplateData (may be FeatureSet format) for RegNo {RegNo}", RegNo.Trim());
+            }
+            // Last resort: use raw sample data
             if ((templateData == null || templateData.Length == 0) &&
                 captureResult.SampleData != null && captureResult.SampleData.Length > 0)
             {

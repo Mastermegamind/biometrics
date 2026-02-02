@@ -45,6 +45,7 @@ public partial class App : Application
 
             serviceProvider.GetRequiredService<SyncManager>().Start();
             serviceProvider.GetRequiredService<EnrollmentCacheRefresher>().Start();
+            serviceProvider.GetRequiredService<OnlineTemplateSync>().StartBackgroundSync(TimeSpan.FromMinutes(1));
             _ = Task.Run(async () => await services.Fingerprint.InitializeAsync());
 
             var mainWindow = new MainWindow
@@ -180,6 +181,7 @@ public partial class App : Application
         services.AddSingleton<LoginAttemptRepository>();
         services.AddSingleton<PasswordResetRepository>();
         services.AddSingleton<EnrollmentCacheRefresher>();
+        services.AddSingleton<OnlineTemplateSync>();
         services.AddSingleton<AppConfigService>();
 
         // ViewModels

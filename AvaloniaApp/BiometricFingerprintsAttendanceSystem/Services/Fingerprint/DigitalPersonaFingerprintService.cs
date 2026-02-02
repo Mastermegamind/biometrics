@@ -191,8 +191,17 @@ public sealed class DigitalPersonaFingerprintService : FingerprintServiceBase
 
             if (feedback == CaptureFeedback.Good)
             {
+                // Create a proper Template from the FeatureSet using Enrollment
+                // Add the same features multiple times to satisfy the enrollment requirement
+                var enrollment = new Enrollment();
+                while (enrollment.TemplateStatus != DPFP.Processing.Enrollment.Status.Ready)
+                {
+                    enrollment.AddFeatures(features);
+                }
+
+                // Serialize the Template (not FeatureSet) for proper verification later
                 using var outputStream = new MemoryStream();
-                features.Serialize(outputStream);
+                enrollment.Template.Serialize(outputStream);
                 return Task.FromResult<byte[]?>(outputStream.ToArray());
             }
 
@@ -213,10 +222,42 @@ public sealed class DigitalPersonaFingerprintService : FingerprintServiceBase
         try
         {
             using var sampleStream = new MemoryStream(sample);
-            using var templateStream = new MemoryStream(template);
-
             var sampleFeatures = new FeatureSet(sampleStream);
-            var templateObj = new Template(templateStream);
+
+            // Try to deserialize as Template first (new format)
+            Template? templateObj = null;
+            try
+            {
+                using var templateStream = new MemoryStream(template);
+                templateObj = new Template(templateStream);
+            }
+            catch
+            {
+                // Failed to deserialize as Template, try as FeatureSet (old format)
+                // and convert to Template for comparison
+                try
+                {
+                    using var featureStream = new MemoryStream(template);
+                    var storedFeatures = new FeatureSet(featureStream);
+
+                    // Create a Template from the stored FeatureSet
+                    var enrollment = new Enrollment();
+                    while (enrollment.TemplateStatus != DPFP.Processing.Enrollment.Status.Ready)
+                    {
+                        enrollment.AddFeatures(storedFeatures);
+                    }
+                    templateObj = enrollment.Template;
+                }
+                catch
+                {
+                    return Task.FromResult(FingerprintVerifyResult.Error("Failed to deserialize stored template"));
+                }
+            }
+
+            if (templateObj == null)
+            {
+                return Task.FromResult(FingerprintVerifyResult.Error("Invalid template data"));
+            }
 
             var result = Verification.Verify(sampleFeatures, templateObj);
 
@@ -248,9 +289,37 @@ public sealed class DigitalPersonaFingerprintService : FingerprintServiceBase
 
             foreach (var (matricNo, templateData) in templates)
             {
-                using var templateStream = new MemoryStream(templateData);
-                var template = new Template(templateStream);
-                var result = Verification.Verify(sampleFeatures, template);
+                // Try to deserialize as Template first (new format)
+                Template? templateObj = null;
+                try
+                {
+                    using var templateStream = new MemoryStream(templateData);
+                    templateObj = new Template(templateStream);
+                }
+                catch
+                {
+                    // Failed to deserialize as Template, try as FeatureSet (old format)
+                    try
+                    {
+                        using var featureStream = new MemoryStream(templateData);
+                        var storedFeatures = new FeatureSet(featureStream);
+
+                        var enrollment = new Enrollment();
+                        while (enrollment.TemplateStatus != DPFP.Processing.Enrollment.Status.Ready)
+                        {
+                            enrollment.AddFeatures(storedFeatures);
+                        }
+                        templateObj = enrollment.Template;
+                    }
+                    catch
+                    {
+                        continue; // Skip invalid template
+                    }
+                }
+
+                if (templateObj == null) continue;
+
+                var result = Verification.Verify(sampleFeatures, templateObj);
 
                 if (result.Verified)
                 {

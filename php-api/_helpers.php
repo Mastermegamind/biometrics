@@ -397,6 +397,36 @@ function api_get_fingerprint_enrollments(PDO $pdo, string $regNo): array {
 }
 
 /**
+ * Get all fingerprint enrollments for all students (for sync)
+ *
+ * Returns:
+ * - template: base64-encoded (encoded from BLOB for response)
+ * - template_data: base64 string (already stored as base64 in DB)
+ */
+function api_get_all_fingerprint_enrollments(PDO $pdo): array {
+    $stmt = $pdo->query("
+        SELECT reg_no, finger_index, finger_name, template, template_data, image_preview, captured_at
+        FROM fingerprint_enrollments
+        ORDER BY reg_no ASC, finger_index ASC
+    ");
+
+    $records = [];
+    while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
+        $records[] = [
+            'regno' => $row['reg_no'],
+            'finger_index' => (int)$row['finger_index'],
+            'finger_name' => $row['finger_name'],
+            'template' => base64_encode($row['template']),
+            'template_data' => $row['template_data'],
+            'image_preview' => $row['image_preview'],
+            'captured_at' => $row['captured_at'],
+        ];
+    }
+
+    return $records;
+}
+
+/**
  * Ensure attendance_records table exists (new schema per spec)
  */
 function api_ensure_attendance_records_table(PDO $pdo): void {

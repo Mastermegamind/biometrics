@@ -28,6 +28,7 @@ public sealed class ServiceRegistry : IServiceRegistry
         DemoApi = _provider.GetService<DemoBiometricsApiClient>();
         OnlineData = _provider.GetRequiredService<OnlineDataProvider>();
         OnlineMatcher = _provider.GetRequiredService<OnlineTemplateMatcher>();
+        TemplateSync = _provider.GetRequiredService<OnlineTemplateSync>();
         Data = _provider.GetRequiredService<IDataService>();
         Audit = _provider.GetRequiredService<AuditLogService>();
         LoginAttempts = _provider.GetRequiredService<LoginAttemptRepository>();
@@ -48,6 +49,7 @@ public sealed class ServiceRegistry : IServiceRegistry
     public DemoBiometricsApiClient? DemoApi { get; }
     public OnlineDataProvider OnlineData { get; }
     public OnlineTemplateMatcher OnlineMatcher { get; }
+    public OnlineTemplateSync TemplateSync { get; }
     public IDataService Data { get; }
     public AuditLogService Audit { get; }
     public LoginAttemptRepository LoginAttempts { get; }

@@ -207,13 +207,48 @@ public class LiveClockInViewModel : ViewModelBase
             };
 
             ClockInResponse result;
-            var useOnlineMatcher = _services.Data.Mode == SyncMode.OnlineOnly ||
-                                   _services.Data.Mode == SyncMode.OnlineFirst;
 
-            if (useOnlineMatcher)
+            // First, try to authenticate against locally cached templates (synced from online API)
+            var authResult = await _services.TemplateSync.AuthenticateAsync(templateData);
+            UpdateTemplateCacheIndicators();
+
+            if (authResult.Success && !string.IsNullOrEmpty(authResult.RegNo))
             {
+                _logger.LogInformation(
+                    "Local cache auth success: RegNo={RegNo} Score={Score} FAR={FAR}",
+                    authResult.RegNo, authResult.MatchScore, authResult.MatchFar);
+
+                // Use verified clock-in endpoint (no server-side matching needed)
+                var verifiedRequest = new VerifiedClockRequest
+                {
+                    RegNo = authResult.RegNo,
+                    FingerIndex = authResult.FingerIndex,
+                    MatchScore = authResult.MatchScore,
+                    MatchFar = authResult.MatchFar,
+                    Timestamp = LagosTime.Now
+                };
+
+                // Try online verified clock-in first, fall back to offline if unavailable
+                if (_services.Data.IsOnline)
+                {
+                    result = await _services.OnlineData.ClockInVerifiedAsync(verifiedRequest);
+                    if (!result.Success && result.Message?.Contains("Network") == true)
+                    {
+                        _logger.LogWarning("Online verified clock-in failed (network), falling back to offline");
+                        result = await _services.Data.ClockInAsync(clockInRequest);
+                    }
+                }
+                else
+                {
+                    result = await _services.Data.ClockInAsync(clockInRequest);
+                }
+            }
+            else
+            {
+                // Local cache auth failed - try OnlineMatcher as fallback (fetches templates from API)
+                _logger.LogInformation("Local cache auth failed ({Message}), trying OnlineMatcher fallback", authResult.Message);
                 var matchResult = await _services.OnlineMatcher.MatchAsync(templateData);
-                UpdateTemplateCacheIndicators();
+
                 if (matchResult.Success && matchResult.Data != null)
                 {
                     var verifiedRequest = new VerifiedClockRequest
@@ -227,23 +262,12 @@ public class LiveClockInViewModel : ViewModelBase
 
                     result = await _services.OnlineData.ClockInVerifiedAsync(verifiedRequest);
                 }
-                else if (_services.Data.Mode == SyncMode.OnlineFirst && matchResult.ErrorCode == "TEMPLATES_UNAVAILABLE")
-                {
-                    _logger.LogWarning("Online templates unavailable, falling back to offline clock-in");
-                    result = await _services.Data.ClockInAsync(clockInRequest);
-                }
                 else
                 {
-                    ShowResult = true;
-                    IsSuccess = false;
-                    StatusMessage = matchResult.Message ?? "Fingerprint not recognized. Please try again.";
-                    _logger.LogWarning("Live clock-in match failed: {Message}", matchResult.Message ?? "No match");
-                    return;
+                    // Final fallback to offline matching (uses locally enrolled templates)
+                    _logger.LogWarning("OnlineMatcher also failed, falling back to offline clock-in");
+                    result = await _services.Data.ClockInAsync(clockInRequest);
                 }
-            }
-            else
-            {
-                result = await _services.Data.ClockInAsync(clockInRequest);
             }
 
             ShowResult = true;
@@ -332,21 +356,27 @@ public class LiveClockInViewModel : ViewModelBase
 
     private void UpdateTemplateCacheIndicators()
     {
-        if (_services.Data.Mode == SyncMode.OfflineOnly)
+        var sync = _services.TemplateSync;
+
+        if (sync.IsSyncing)
         {
-            TemplateCacheStatus = "Templates: offline";
-            TemplateCacheLastRefresh = "Last refresh: --";
+            TemplateCacheStatus = "Templates: syncing...";
+            TemplateCacheLastRefresh = "Last sync: in progress";
             return;
         }
 
-        var matcher = _services.OnlineMatcher;
-        TemplateCacheStatus = matcher.CachedTemplateCount > 0
-            ? $"Templates: cached ({matcher.CachedTemplateCount})"
+        TemplateCacheStatus = sync.CachedTemplateCount > 0
+            ? $"Templates: cached ({sync.CachedTemplateCount} from {sync.CachedStudentCount} students)"
             : "Templates: not cached";
 
-        TemplateCacheLastRefresh = matcher.LastRefreshAt.HasValue
-            ? $"Last refresh: {matcher.LastRefreshAt.Value:HH:mm:ss}"
-            : "Last refresh: --";
+        TemplateCacheLastRefresh = sync.LastSyncAt.HasValue
+            ? $"Last sync: {sync.LastSyncAt.Value:HH:mm:ss}"
+            : "Last sync: --";
+
+        if (!string.IsNullOrEmpty(sync.LastSyncError))
+        {
+            TemplateCacheLastRefresh += $" (Error: {sync.LastSyncError})";
+        }
     }
 }
 
