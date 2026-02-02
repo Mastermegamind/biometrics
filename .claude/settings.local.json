@@ -6,7 +6,8 @@
       "Bash(dotnet build:*)",
       "Bash(powershell:*)",
       "Bash(echo:*)",
-      "Bash(Select-Object -First 3 FullName)"
+      "Bash(Select-Object -First 3 FullName)",
+      "Bash(.build.ps1)"
     ]
   }
 }

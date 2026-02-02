@@ -122,7 +122,10 @@ public sealed class OnlineTemplateSync : IDisposable
                 return new SyncResult { Success = false, Message = error };
             }
 
+            _logger.LogInformation("Fetched {StudentCount} students with templates from API", onlineResult.Data.Count);
+
             await using var conn = await _db.CreateConnectionAsync();
+            _logger.LogDebug("Database connection established for sync");
 
             foreach (var (regNo, templates) in onlineResult.Data)
             {
@@ -187,8 +190,11 @@ public sealed class OnlineTemplateSync : IDisposable
             }
             else
             {
-                _logger.LogDebug("Smart sync completed: no changes detected ({Skipped} templates unchanged)", skippedCount);
+                _logger.LogInformation("Smart sync completed: no changes detected ({Skipped} templates unchanged)", skippedCount);
             }
+
+            // Clear local hash cache so next sync re-reads from DB
+            _cache.Remove(LocalHashCacheKey);
 
             return new SyncResult
             {
@@ -428,13 +434,25 @@ public sealed class OnlineTemplateSync : IDisposable
 
     private async Task EnsureStudentExistsAsync(MySqlConnector.MySqlConnection conn, string regNo)
     {
-        await using var cmd = conn.CreateCommand();
-        cmd.CommandText = @"
-            INSERT IGNORE INTO students (regno, name, updated_at)
-            VALUES (@regno, @name, CURRENT_TIMESTAMP)";
-        cmd.Parameters.AddWithValue("@regno", regNo);
-        cmd.Parameters.AddWithValue("@name", regNo);
-        await cmd.ExecuteNonQueryAsync();
+        try
+        {
+            await using var cmd = conn.CreateCommand();
+            cmd.CommandText = @"
+                INSERT IGNORE INTO students (regno, name, updated_at)
+                VALUES (@regno, @name, CURRENT_TIMESTAMP)";
+            cmd.Parameters.AddWithValue("@regno", regNo);
+            cmd.Parameters.AddWithValue("@name", regNo);
+            var rows = await cmd.ExecuteNonQueryAsync();
+            if (rows > 0)
+            {
+                _logger.LogDebug("Created student placeholder: {RegNo}", regNo);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to ensure student exists: {RegNo}", regNo);
+            throw;
+        }
     }
 
     private async Task UpsertTemplateAsync(
@@ -445,28 +463,39 @@ public sealed class OnlineTemplateSync : IDisposable
         byte[] templateData,
         string templateHash)
     {
-        await using var cmd = conn.CreateCommand();
-        cmd.CommandText = @"
-            INSERT INTO fingerprint_enrollments
-                (regno, finger_index, finger_name, template, template_data, template_hash, captured_at)
-            VALUES
-                (@regNo, @fingerIndex, @fingerName, @template, @templateData, @templateHash, @capturedAt)
-            ON DUPLICATE KEY UPDATE
-                finger_name = VALUES(finger_name),
-                template = VALUES(template),
-                template_data = VALUES(template_data),
-                template_hash = VALUES(template_hash),
-                captured_at = VALUES(captured_at)";
+        try
+        {
+            await using var cmd = conn.CreateCommand();
+            cmd.CommandText = @"
+                INSERT INTO fingerprint_enrollments
+                    (regno, finger_index, finger_name, template, template_data, template_hash, captured_at)
+                VALUES
+                    (@regNo, @fingerIndex, @fingerName, @template, @templateData, @templateHash, @capturedAt)
+                ON DUPLICATE KEY UPDATE
+                    finger_name = VALUES(finger_name),
+                    template = VALUES(template),
+                    template_data = VALUES(template_data),
+                    template_hash = VALUES(template_hash),
+                    captured_at = VALUES(captured_at)";
 
-        cmd.Parameters.AddWithValue("@regNo", regNo);
-        cmd.Parameters.AddWithValue("@fingerIndex", fingerIndex);
-        cmd.Parameters.AddWithValue("@fingerName", NormalizeFingerName(fingerName, fingerIndex));
-        cmd.Parameters.AddWithValue("@template", templateData);
-        cmd.Parameters.AddWithValue("@templateData", Convert.ToBase64String(templateData));
-        cmd.Parameters.AddWithValue("@templateHash", templateHash);
-        cmd.Parameters.AddWithValue("@capturedAt", LagosTime.Now);
+            cmd.Parameters.AddWithValue("@regNo", regNo);
+            cmd.Parameters.AddWithValue("@fingerIndex", fingerIndex);
+            cmd.Parameters.AddWithValue("@fingerName", NormalizeFingerName(fingerName, fingerIndex));
+            cmd.Parameters.AddWithValue("@template", templateData);
+            cmd.Parameters.AddWithValue("@templateData", Convert.ToBase64String(templateData));
+            cmd.Parameters.AddWithValue("@templateHash", templateHash);
+            cmd.Parameters.AddWithValue("@capturedAt", LagosTime.Now);
 
-        await cmd.ExecuteNonQueryAsync();
+            var rows = await cmd.ExecuteNonQueryAsync();
+            _logger.LogInformation(
+                "Upserted template: RegNo={RegNo} Finger={Finger} Hash={Hash} Bytes={Bytes} Rows={Rows}",
+                regNo, fingerIndex, templateHash[..16] + "...", templateData.Length, rows);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to upsert template: RegNo={RegNo} Finger={Finger}", regNo, fingerIndex);
+            throw;
+        }
     }
 
     private static string ComputeHash(byte[] data)
