@@ -259,7 +259,13 @@ public class OnlineDataProvider
             }
 
             var records = ParseEnrollmentRecords(body);
+            _logger.LogDebug("ParseEnrollmentRecords returned {Count} records", records.Count);
+
             var grouped = new Dictionary<string, List<FingerprintTemplate>>(StringComparer.OrdinalIgnoreCase);
+            var skippedEmpty = 0;
+            var skippedDecode = 0;
+            var skippedZeroBytes = 0;
+
             foreach (var record in records)
             {
                 var base64 = string.IsNullOrWhiteSpace(record.TemplateData)
@@ -267,6 +273,8 @@ public class OnlineDataProvider
                     : record.TemplateData;
                 if (string.IsNullOrWhiteSpace(base64))
                 {
+                    skippedEmpty++;
+                    _logger.LogDebug("Skipping record {RegNo} finger {Finger}: empty template", record.RegNo, record.FingerIndex);
                     continue;
                 }
 
@@ -275,13 +283,18 @@ public class OnlineDataProvider
                 {
                     bytes = Convert.FromBase64String(base64);
                 }
-                catch
+                catch (FormatException ex)
                 {
+                    skippedDecode++;
+                    _logger.LogWarning("Skipping record {RegNo} finger {Finger}: base64 decode failed - {Error} (first 50 chars: {Sample})",
+                        record.RegNo, record.FingerIndex, ex.Message, base64.Length > 50 ? base64[..50] : base64);
                     continue;
                 }
 
                 if (bytes.Length == 0 || string.IsNullOrWhiteSpace(record.RegNo))
                 {
+                    skippedZeroBytes++;
+                    _logger.LogDebug("Skipping record {RegNo} finger {Finger}: zero bytes or empty regNo", record.RegNo, record.FingerIndex);
                     continue;
                 }
 
@@ -299,7 +312,15 @@ public class OnlineDataProvider
                 });
             }
 
+            if (skippedEmpty > 0 || skippedDecode > 0 || skippedZeroBytes > 0)
+            {
+                _logger.LogWarning("Template parsing: {Total} records, skipped {Empty} empty, {Decode} decode errors, {ZeroBytes} zero bytes",
+                    records.Count, skippedEmpty, skippedDecode, skippedZeroBytes);
+            }
+
             var results = grouped.Select(kvp => (kvp.Key, kvp.Value)).ToList();
+            _logger.LogDebug("Grouped into {StudentCount} students with {TemplateCount} total templates",
+                results.Count, results.Sum(r => r.Value.Count));
             return DataResult<List<(string RegNo, List<FingerprintTemplate> Templates)>>.Ok(results);
         }
         catch (Exception ex)
@@ -1022,33 +1043,46 @@ public class OnlineDataProvider
     {
         if (string.IsNullOrWhiteSpace(body))
         {
+            _logger.LogDebug("ParseEnrollmentRecords: empty body");
             return [];
         }
 
         try
         {
             var envelope = JsonSerializer.Deserialize<ApiEnrollmentListEnvelope>(body, _jsonOptions);
+            _logger.LogDebug("ParseEnrollmentRecords: envelope Success={Success}, Records={RecordsCount}, Data={DataCount}",
+                envelope?.Success, envelope?.Records?.Count ?? 0, envelope?.Data?.Count ?? 0);
+
             if (envelope?.Records != null && envelope.Records.Count > 0)
             {
+                _logger.LogDebug("ParseEnrollmentRecords: returning {Count} records from envelope.Records", envelope.Records.Count);
+                // Log first record for debugging
+                var first = envelope.Records[0];
+                _logger.LogDebug("First record: RegNo={RegNo}, FingerIndex={FingerIndex}, FingerName={FingerName}, TemplateLen={TemplateLen}",
+                    first.RegNo, first.FingerIndex, first.FingerName, first.Template?.Length ?? 0);
                 return envelope.Records;
             }
             if (envelope?.Data != null && envelope.Data.Count > 0)
             {
+                _logger.LogDebug("ParseEnrollmentRecords: returning {Count} records from envelope.Data", envelope.Data.Count);
                 return envelope.Data;
             }
+            _logger.LogDebug("ParseEnrollmentRecords: envelope parsed but no records found");
         }
-        catch
+        catch (Exception ex)
         {
-            // fall through to try array parsing
+            _logger.LogWarning(ex, "ParseEnrollmentRecords: envelope parsing failed, trying array");
         }
 
         try
         {
             var direct = JsonSerializer.Deserialize<List<ApiEnrollmentRecord>>(body, _jsonOptions);
+            _logger.LogDebug("ParseEnrollmentRecords: direct array parsing returned {Count} records", direct?.Count ?? 0);
             return direct ?? [];
         }
-        catch
+        catch (Exception ex)
         {
+            _logger.LogWarning(ex, "ParseEnrollmentRecords: all parsing methods failed");
             return [];
         }
     }

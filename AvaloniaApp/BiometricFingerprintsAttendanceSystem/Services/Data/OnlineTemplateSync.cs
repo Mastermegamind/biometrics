@@ -24,7 +24,6 @@ public sealed class OnlineTemplateSync : IDisposable
 
     private Task? _backgroundTask;
     private bool _disposed;
-    private bool _initialSyncDone;
 
     private const string TemplateCacheKey = "all_fingerprint_templates_cache";
     private const string LocalHashCacheKey = "local_template_hashes";
@@ -178,7 +177,6 @@ public sealed class OnlineTemplateSync : IDisposable
             LastSyncSkippedCount = skippedCount;
             LastSyncAt = LagosTime.Now;
             LastSyncError = null;
-            _initialSyncDone = true;
 
             // Clear memory cache only if there were changes
             if (newCount > 0 || updatedCount > 0)
