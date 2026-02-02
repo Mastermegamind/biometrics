@@ -270,6 +270,12 @@ public class OnlineDataProvider
             };
 
             var path = NormalizeApiPath(_config.EnrollmentSubmitPath);
+
+            // Serialize with explicit options to ensure correct format
+            var actualJson = JsonSerializer.Serialize(payload, _jsonOptions);
+            _logger.LogInformation("Enrollment actual JSON payload (first 500 chars): {Json}",
+                actualJson.Length > 500 ? actualJson[..500] + "..." : actualJson);
+
             LogRequest("POST", path, new
             {
                 payload.RegNo,
@@ -283,7 +289,10 @@ public class OnlineDataProvider
                     t.CapturedAt
                 }).ToList()
             });
-            var response = await _http.PostAsJsonAsync(path, payload, _jsonOptions);
+
+            // Use explicit StringContent to ensure proper Content-Type and encoding
+            using var content = new StringContent(actualJson, Encoding.UTF8, "application/json");
+            var response = await _http.PostAsync(path, content);
             var body = await SafeReadResponseBodyAsync(response);
             LogResponse(path, response, body);
 
@@ -309,24 +318,30 @@ public class OnlineDataProvider
     {
         try
         {
+            var templateBase64 = Convert.ToBase64String(request.FingerprintTemplate);
             var payload = new ApiClockInRequest
             {
-                TemplateBase64 = Convert.ToBase64String(request.FingerprintTemplate),
+                TemplateBase64 = templateBase64,
                 Timestamp = request.Timestamp,
                 DeviceId = request.DeviceId
             };
             _logger.LogInformation("Clock-in payload template bytes: {ByteCount}", request.FingerprintTemplate?.Length ?? 0);
 
             var path = "/api/attendance/clockin";
-            LogRequest("POST", path, new
-            {
-                TemplateBytes = payload.TemplateBase64.Length,
-                payload.Timestamp,
-                payload.DeviceId
-            });
-            var response = await _http.PostAsJsonAsync(path, payload, _jsonOptions);
+
+            // Serialize with explicit options
+            var actualJson = JsonSerializer.Serialize(payload, _jsonOptions);
+            _logger.LogInformation("Clock-in actual JSON payload (first 300 chars): {Json}",
+                actualJson.Length > 300 ? actualJson[..300] + "..." : actualJson);
+
+            _logger.LogInformation("Clock-in POST {Path} (templateBase64 length: {Len} chars)",
+                path, payload.TemplateBase64.Length);
+
+            // Use explicit StringContent to ensure proper Content-Type and encoding
+            using var content = new StringContent(actualJson, Encoding.UTF8, "application/json");
+            var response = await _http.PostAsync(path, content);
             var body = await SafeReadResponseBodyAsync(response);
-            LogResponse(path, response, body);
+            _logger.LogInformation("Clock-in response: {StatusCode} - {Body}", (int)response.StatusCode, body);
             var apiResponse = JsonSerializer.Deserialize<ApiClockInResponse>(body, _jsonOptions);
 
             if (!response.IsSuccessStatusCode || apiResponse == null)
@@ -371,22 +386,32 @@ public class OnlineDataProvider
     {
         try
         {
+            var templateBase64 = Convert.ToBase64String(request.FingerprintTemplate);
             var payload = new ApiClockOutRequest
             {
-                TemplateBase64 = Convert.ToBase64String(request.FingerprintTemplate),
+                TemplateBase64 = templateBase64,
                 Timestamp = request.Timestamp,
                 DeviceId = request.DeviceId
             };
             _logger.LogInformation("Clock-out payload template bytes: {ByteCount}", request.FingerprintTemplate?.Length ?? 0);
 
             var path = "/api/attendance/clockout";
+
+            // Serialize with explicit options
+            var actualJson = JsonSerializer.Serialize(payload, _jsonOptions);
+            _logger.LogInformation("Clock-out actual JSON payload (first 300 chars): {Json}",
+                actualJson.Length > 300 ? actualJson[..300] + "..." : actualJson);
+
             LogRequest("POST", path, new
             {
                 TemplateBytes = payload.TemplateBase64.Length,
                 payload.Timestamp,
                 payload.DeviceId
             });
-            var response = await _http.PostAsJsonAsync(path, payload, _jsonOptions);
+
+            // Use explicit StringContent to ensure proper Content-Type and encoding
+            using var content = new StringContent(actualJson, Encoding.UTF8, "application/json");
+            var response = await _http.PostAsync(path, content);
             var body = await SafeReadResponseBodyAsync(response);
             LogResponse(path, response, body);
             var apiResponse = JsonSerializer.Deserialize<ApiClockOutResponse>(body, _jsonOptions);
@@ -576,8 +601,11 @@ public class OnlineDataProvider
 
     private record ApiClockInRequest
     {
+        [JsonPropertyName("templateBase64")]
         public string TemplateBase64 { get; init; } = "";
+        [JsonPropertyName("timestamp")]
         public DateTime Timestamp { get; init; }
+        [JsonPropertyName("deviceId")]
         public string? DeviceId { get; init; }
     }
 
@@ -592,8 +620,11 @@ public class OnlineDataProvider
 
     private record ApiClockOutRequest
     {
+        [JsonPropertyName("templateBase64")]
         public string TemplateBase64 { get; init; } = "";
+        [JsonPropertyName("timestamp")]
         public DateTime Timestamp { get; init; }
+        [JsonPropertyName("deviceId")]
         public string? DeviceId { get; init; }
     }
 
