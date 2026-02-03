@@ -216,12 +216,6 @@ public class LiveClockOutViewModel : ViewModelBase
 
             SaveClockOutTemplate(templateData, "unknown", "captured");
 
-            var clockOutRequest = new ClockOutRequest
-            {
-                FingerprintTemplate = templateData,
-                Timestamp = LagosTime.Now
-            };
-
             ClockOutResponse result;
 
             // First, try to authenticate against locally cached templates (synced from online API)
@@ -245,47 +239,18 @@ public class LiveClockOutViewModel : ViewModelBase
                     Timestamp = LagosTime.Now
                 };
 
-                // Try online verified clock-out first, fall back to offline if unavailable
-                if (_services.Data.IsOnline)
-                {
-                    result = await _services.OnlineData.ClockOutVerifiedAsync(verifiedRequest);
-                    if (!result.Success && result.Message?.Contains("Network") == true)
-                    {
-                        _logger.LogWarning("Online verified clock-out failed (network), falling back to offline");
-                        result = await _services.Data.ClockOutAsync(clockOutRequest);
-                    }
-                }
-                else
-                {
-                    result = await _services.Data.ClockOutAsync(clockOutRequest);
-                }
+                // Record clock-out using verified identity (offline-first safe)
+                result = await _services.Data.ClockOutVerifiedAsync(verifiedRequest);
             }
             else
             {
-                // Local cache auth failed - try OnlineMatcher as fallback (fetches templates from API)
-                _logger.LogInformation("Local cache auth failed ({Message}), trying OnlineMatcher fallback", authResult.Message);
-                var matchResult = await _services.OnlineMatcher.MatchAsync(templateData);
-
-                if (matchResult.Success && matchResult.Data != null)
+                // Only use synced local disk cache for validation
+                _logger.LogWarning("Local cache auth failed: {Message}", authResult.Message ?? "Fingerprint not recognized");
+                result = new ClockOutResponse
                 {
-                    SaveClockOutTemplate(templateData, matchResult.Data.RegNo, "onlinematcher");
-                    var verifiedRequest = new VerifiedClockRequest
-                    {
-                        RegNo = matchResult.Data.RegNo,
-                        FingerIndex = matchResult.Data.FingerIndex,
-                        MatchScore = matchResult.Data.MatchScore,
-                        MatchFar = matchResult.Data.MatchFar,
-                        Timestamp = LagosTime.Now
-                    };
-
-                    result = await _services.OnlineData.ClockOutVerifiedAsync(verifiedRequest);
-                }
-                else
-                {
-                    // Final fallback to offline matching (uses locally enrolled templates)
-                    _logger.LogWarning("OnlineMatcher also failed, falling back to offline clock-out");
-                    result = await _services.Data.ClockOutAsync(clockOutRequest);
-                }
+                    Success = false,
+                    Message = authResult.Message ?? "Fingerprint not recognized"
+                };
             }
 
             ShowResult = true;

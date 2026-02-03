@@ -827,6 +827,7 @@ try {
 
                 // Get base64 string for template_data column (stored as TEXT, not decoded)
                 $templateBase64ForStorage = $templateBase64;
+                $templateHash = api_hash_template($decodedTemplate);
 
                 // Use finger_name from request or generate from index
                 if ($fingerName === '') {
@@ -869,6 +870,7 @@ try {
                     $fingerName,
                     $decodedTemplate,
                     $templateBase64ForStorage,
+                    $templateHash,
                     $previewFilename !== '' ? $previewFilename : null,
                     $capturedAt
                 );

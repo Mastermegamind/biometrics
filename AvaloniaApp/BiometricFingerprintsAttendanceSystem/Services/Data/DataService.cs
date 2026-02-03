@@ -182,6 +182,30 @@ public class DataService : IDataService
         };
     }
 
+    public async Task<ClockInResponse> ClockInVerifiedAsync(VerifiedClockRequest request)
+    {
+        return Mode switch
+        {
+            SyncMode.OnlineOnly => await _online.ClockInVerifiedAsync(request),
+            SyncMode.OfflineOnly => await _offline.ClockInVerifiedAsync(request),
+            SyncMode.OnlineFirst => await OnlineFirstClockInVerifiedAsync(request),
+            SyncMode.OfflineFirst => await OfflineFirstClockInVerifiedAsync(request),
+            _ => new ClockInResponse { Success = false, Message = "Invalid sync mode" }
+        };
+    }
+
+    public async Task<ClockOutResponse> ClockOutVerifiedAsync(VerifiedClockRequest request)
+    {
+        return Mode switch
+        {
+            SyncMode.OnlineOnly => await _online.ClockOutVerifiedAsync(request),
+            SyncMode.OfflineOnly => await _offline.ClockOutVerifiedAsync(request),
+            SyncMode.OnlineFirst => await OnlineFirstClockOutVerifiedAsync(request),
+            SyncMode.OfflineFirst => await OfflineFirstClockOutVerifiedAsync(request),
+            _ => new ClockOutResponse { Success = false, Message = "Invalid sync mode" }
+        };
+    }
+
     public async Task<DataResult<List<AttendanceRecord>>> GetAttendanceAsync(DateTime from, DateTime to, string? regNo = null)
     {
         return Mode switch
@@ -420,6 +444,62 @@ public class DataService : IDataService
         return localResult;
     }
 
+    private async Task<ClockInResponse> OnlineFirstClockInVerifiedAsync(VerifiedClockRequest request)
+    {
+        var result = await _online.ClockInVerifiedAsync(request);
+        if (result.Success)
+        {
+            _isOnline = true;
+            return result;
+        }
+
+        _isOnline = false;
+        _logger.LogWarning("Online verified clock-in failed, falling back to offline: {Message}", result.Message);
+
+        var localResult = await _offline.ClockInVerifiedAsync(request);
+        if (localResult.Success)
+        {
+            var json = JsonSerializer.Serialize(new
+            {
+                RegNo = request.RegNo,
+                Timestamp = request.Timestamp,
+                DeviceId = request.DeviceId
+            }, _jsonOptions);
+            await _offline.QueueForSyncAsync("ClockIn", json);
+            _pendingSyncCount++;
+        }
+
+        return localResult;
+    }
+
+    private async Task<ClockOutResponse> OnlineFirstClockOutVerifiedAsync(VerifiedClockRequest request)
+    {
+        var result = await _online.ClockOutVerifiedAsync(request);
+        if (result.Success)
+        {
+            _isOnline = true;
+            return result;
+        }
+
+        _isOnline = false;
+        _logger.LogWarning("Online verified clock-out failed, falling back to offline: {Message}", result.Message);
+
+        var localResult = await _offline.ClockOutVerifiedAsync(request);
+        if (localResult.Success)
+        {
+            var json = JsonSerializer.Serialize(new
+            {
+                RegNo = request.RegNo,
+                Timestamp = request.Timestamp,
+                DeviceId = request.DeviceId
+            }, _jsonOptions);
+            await _offline.QueueForSyncAsync("ClockOut", json);
+            _pendingSyncCount++;
+        }
+
+        return localResult;
+    }
+
     private async Task<DataResult<List<AttendanceRecord>>> OnlineFirstGetAttendanceAsync(DateTime from, DateTime to, string? regNo)
     {
         var result = await _online.GetAttendanceAsync(from, to, regNo);
@@ -549,6 +629,44 @@ public class DataService : IDataService
             var json = JsonSerializer.Serialize(new
             {
                 RegNo = result.Student?.RegNo,
+                Timestamp = request.Timestamp,
+                DeviceId = request.DeviceId
+            }, _jsonOptions);
+            await _offline.QueueForSyncAsync("ClockOut", json);
+            _pendingSyncCount++;
+        }
+
+        return result;
+    }
+
+    private async Task<ClockInResponse> OfflineFirstClockInVerifiedAsync(VerifiedClockRequest request)
+    {
+        var result = await _offline.ClockInVerifiedAsync(request);
+
+        if (result.Success)
+        {
+            var json = JsonSerializer.Serialize(new
+            {
+                RegNo = request.RegNo,
+                Timestamp = request.Timestamp,
+                DeviceId = request.DeviceId
+            }, _jsonOptions);
+            await _offline.QueueForSyncAsync("ClockIn", json);
+            _pendingSyncCount++;
+        }
+
+        return result;
+    }
+
+    private async Task<ClockOutResponse> OfflineFirstClockOutVerifiedAsync(VerifiedClockRequest request)
+    {
+        var result = await _offline.ClockOutVerifiedAsync(request);
+
+        if (result.Success)
+        {
+            var json = JsonSerializer.Serialize(new
+            {
+                RegNo = request.RegNo,
                 Timestamp = request.Timestamp,
                 DeviceId = request.DeviceId
             }, _jsonOptions);

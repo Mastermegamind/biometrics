@@ -1,6 +1,7 @@
 using BiometricFingerprintsAttendanceSystem.Services.Db;
 using BiometricFingerprintsAttendanceSystem.Services.Fingerprint;
 using Microsoft.Extensions.Caching.Memory;
+using System.Security.Cryptography;
 using Microsoft.Extensions.Logging;
 using MySqlConnector;
 
@@ -173,13 +174,14 @@ public class OfflineDataProvider
                 await using var upsertCmd = conn.CreateCommand();
                 upsertCmd.CommandText = @"
                     INSERT INTO fingerprint_enrollments
-                        (regno, finger_index, finger_name, template, template_data, image_preview, captured_at)
+                        (regno, finger_index, finger_name, template, template_data, template_hash, image_preview, captured_at)
                     VALUES
-                        (@regNo, @fingerIndex, @fingerName, @template, @templateData, @imagePreview, @capturedAt)
+                        (@regNo, @fingerIndex, @fingerName, @template, @templateData, @templateHash, @imagePreview, @capturedAt)
                     ON DUPLICATE KEY UPDATE
                         finger_name = VALUES(finger_name),
                         template = VALUES(template),
                         template_data = VALUES(template_data),
+                        template_hash = VALUES(template_hash),
                         image_preview = VALUES(image_preview),
                         captured_at = VALUES(captured_at)";
 
@@ -188,6 +190,7 @@ public class OfflineDataProvider
                 upsertCmd.Parameters.AddWithValue("@fingerName", NormalizeFingerName(template.Finger, template.FingerIndex));
                 upsertCmd.Parameters.AddWithValue("@template", template.TemplateData);
                 upsertCmd.Parameters.AddWithValue("@templateData", Convert.ToBase64String(template.TemplateData));
+                upsertCmd.Parameters.AddWithValue("@templateHash", ComputeTemplateHash(template.TemplateData));
                 upsertCmd.Parameters.AddWithValue("@imagePreview", (object?)SaveFingerprintPreviewToDisk(request.RegNo, template.ImagePath) ?? DBNull.Value);
                 upsertCmd.Parameters.AddWithValue("@capturedAt", request.EnrolledAt);
 
@@ -799,6 +802,154 @@ public class OfflineDataProvider
         }
     }
 
+    /// <summary>
+    /// Clock out with a pre-verified identity (no additional matching).
+    /// Uses the synced local disk cache as the source of truth for validation.
+    /// </summary>
+    public async Task<ClockOutResponse> ClockOutVerifiedAsync(VerifiedClockRequest request)
+    {
+        try
+        {
+            if (string.IsNullOrWhiteSpace(request.RegNo))
+            {
+                return new ClockOutResponse { Success = false, Message = "Invalid RegNo" };
+            }
+
+            var now = request.Timestamp == default ? LagosTime.Now : request.Timestamp;
+            var date = now.Date;
+
+            // Get student info
+            var studentResult = await GetStudentAsync(request.RegNo);
+            var student = studentResult.Data ?? new StudentInfo { RegNo = request.RegNo, Name = request.RegNo };
+
+            // Find today's clock-in record
+            await using var conn = await _db.CreateConnectionAsync();
+            await using var findCmd = conn.CreateCommand();
+            findCmd.CommandText = @"
+                SELECT id, timein FROM attendance
+                WHERE regno = @regNo AND date = @date AND timeout IS NULL
+                ORDER BY id DESC LIMIT 1";
+            findCmd.Parameters.AddWithValue("@regNo", request.RegNo);
+            findCmd.Parameters.AddWithValue("@date", date.ToString("yyyy-MM-dd"));
+
+            await using var reader = await findCmd.ExecuteReaderAsync();
+            if (!await reader.ReadAsync())
+            {
+                return new ClockOutResponse
+                {
+                    Success = false,
+                    Message = "No clock-in record found for today",
+                    NotClockedIn = true,
+                    Student = student
+                };
+            }
+
+            var recordId = reader.GetInt64(0);
+            var timeInStr = reader.GetString(1);
+            await reader.CloseAsync();
+
+            // Update with clock-out time
+            await using var updateCmd = conn.CreateCommand();
+            updateCmd.CommandText = "UPDATE attendance SET timeout = @timeout WHERE id = @id";
+            updateCmd.Parameters.AddWithValue("@timeout", now.ToString("HH:mm:ss"));
+            updateCmd.Parameters.AddWithValue("@id", recordId);
+
+            await updateCmd.ExecuteNonQueryAsync();
+
+            // Calculate duration
+            var timeIn = DateTime.Parse($"{date:yyyy-MM-dd} {timeInStr}");
+            var duration = now - timeIn;
+
+            _logger.LogInformation("Clock-out recorded locally (verified) for {RegNo} at {Time}", request.RegNo, now);
+
+            return new ClockOutResponse
+            {
+                Success = true,
+                Message = "Clock-out successful",
+                Student = student,
+                ClockInTime = timeIn,
+                ClockOutTime = now,
+                Duration = duration
+            };
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Local verified clock-out failed");
+            return new ClockOutResponse { Success = false, Message = ex.Message };
+        }
+    }
+
+    /// <summary>
+    /// Clock in with a pre-verified identity (no additional matching).
+    /// Uses the synced local disk cache as the source of truth for validation.
+    /// </summary>
+    public async Task<ClockInResponse> ClockInVerifiedAsync(VerifiedClockRequest request)
+    {
+        try
+        {
+            if (string.IsNullOrWhiteSpace(request.RegNo))
+            {
+                return new ClockInResponse { Success = false, Message = "Invalid RegNo" };
+            }
+
+            var now = request.Timestamp == default ? LagosTime.Now : request.Timestamp;
+            var date = now.Date;
+
+            // Get student info
+            var studentResult = await GetStudentAsync(request.RegNo);
+            var student = studentResult.Data ?? new StudentInfo { RegNo = request.RegNo, Name = request.RegNo };
+
+            // Check if already clocked in today
+            await using var conn = await _db.CreateConnectionAsync();
+            await using var checkCmd = conn.CreateCommand();
+            checkCmd.CommandText = @"
+                SELECT id FROM attendance
+                WHERE regno = @regNo AND date = @date AND timeout IS NULL";
+            checkCmd.Parameters.AddWithValue("@regNo", request.RegNo);
+            checkCmd.Parameters.AddWithValue("@date", date.ToString("yyyy-MM-dd"));
+
+            var existingRecord = await checkCmd.ExecuteScalarAsync();
+            if (existingRecord != null)
+            {
+                return new ClockInResponse
+                {
+                    Success = false,
+                    Message = "Already clocked in today",
+                    AlreadyClockedIn = true,
+                    Student = student
+                };
+            }
+
+            // Record clock-in
+            await using var insertCmd = conn.CreateCommand();
+            insertCmd.CommandText = @"
+                INSERT INTO attendance (regno, name, date, day, timein)
+                VALUES (@regNo, @name, @date, @day, @timein)";
+            insertCmd.Parameters.AddWithValue("@regNo", request.RegNo);
+            insertCmd.Parameters.AddWithValue("@name", student.Name);
+            insertCmd.Parameters.AddWithValue("@date", date.ToString("yyyy-MM-dd"));
+            insertCmd.Parameters.AddWithValue("@day", date.DayOfWeek.ToString());
+            insertCmd.Parameters.AddWithValue("@timein", now.ToString("HH:mm:ss"));
+
+            await insertCmd.ExecuteNonQueryAsync();
+
+            _logger.LogInformation("Clock-in recorded locally (verified) for {RegNo} at {Time}", request.RegNo, now);
+
+            return new ClockInResponse
+            {
+                Success = true,
+                Message = "Clock-in successful",
+                Student = student,
+                ClockInTime = now
+            };
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Local verified clock-in failed");
+            return new ClockInResponse { Success = false, Message = ex.Message };
+        }
+    }
+
     public async Task UpdateEnrollmentStatusAsync(string regNo, EnrollmentStatus status)
     {
         try
@@ -906,6 +1057,16 @@ public class OfflineDataProvider
         var invalid = Path.GetInvalidFileNameChars();
         var cleaned = new string(value.Select(ch => invalid.Contains(ch) ? '_' : ch).ToArray());
         return cleaned.Replace(' ', '_');
+    }
+
+    private static string ComputeTemplateHash(byte[] data)
+    {
+        if (data.Length == 0)
+        {
+            return string.Empty;
+        }
+        var hash = SHA256.HashData(data);
+        return Convert.ToHexString(hash);
     }
 
     private static string GetFingerprintPreviewDir()

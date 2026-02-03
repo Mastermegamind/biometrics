@@ -199,7 +199,7 @@ public class OnlineDataProvider
             var templates = new List<FingerprintTemplate>();
             foreach (var record in records)
             {
-                var base64 = string.IsNullOrWhiteSpace(record.TemplateData)
+                var base64 = !string.IsNullOrWhiteSpace(record.Template)
                     ? record.Template
                     : record.TemplateData;
                 if (string.IsNullOrWhiteSpace(base64))
@@ -267,7 +267,7 @@ public class OnlineDataProvider
 
             foreach (var record in records)
             {
-                var base64 = string.IsNullOrWhiteSpace(record.TemplateData)
+                var base64 = !string.IsNullOrWhiteSpace(record.Template)
                     ? record.Template
                     : record.TemplateData;
                 if (string.IsNullOrWhiteSpace(base64))

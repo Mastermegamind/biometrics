@@ -259,7 +259,9 @@ public sealed class DigitalPersonaFingerprintService : FingerprintServiceBase
                 return Task.FromResult(FingerprintVerifyResult.Error("Invalid template data"));
             }
 
-            var result = Verification.Verify(sampleFeatures, templateObj);
+            var verifier = new Verification();
+            var result = new Verification.Result();
+            verifier.Verify(sampleFeatures, templateObj, ref result);
 
             if (result.Verified)
             {
@@ -319,7 +321,9 @@ public sealed class DigitalPersonaFingerprintService : FingerprintServiceBase
 
                 if (templateObj == null) continue;
 
-                var result = Verification.Verify(sampleFeatures, templateObj);
+                var verifier = new Verification();
+                var result = new Verification.Result();
+                verifier.Verify(sampleFeatures, templateObj, ref result);
 
                 if (result.Verified)
                 {

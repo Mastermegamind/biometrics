@@ -69,6 +69,16 @@ public interface IDataService
     Task<ClockOutResponse> ClockOutAsync(ClockOutRequest request);
 
     /// <summary>
+    /// Clock in with a pre-verified identity (client-side matching).
+    /// </summary>
+    Task<ClockInResponse> ClockInVerifiedAsync(VerifiedClockRequest request);
+
+    /// <summary>
+    /// Clock out with a pre-verified identity (client-side matching).
+    /// </summary>
+    Task<ClockOutResponse> ClockOutVerifiedAsync(VerifiedClockRequest request);
+
+    /// <summary>
     /// Get attendance records for a date range.
     /// </summary>
     Task<DataResult<List<AttendanceRecord>>> GetAttendanceAsync(DateTime from, DateTime to, string? regNo = null);

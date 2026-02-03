@@ -280,13 +280,21 @@ function api_decode_template_base64(string $templateBase64): ?string {
  * @param string|null $templateData Base64 stored in DB (preferred)
  */
 function api_normalize_template_base64(?string $templateBlob, ?string $templateData): string {
+    // Prefer the raw template BLOB bytes as the source of truth.
+    if ($templateBlob !== null && $templateBlob !== '') {
+        // If the blob contains base64 text (legacy bug), decode and re-encode once.
+        if (api_is_valid_base64($templateBlob)) {
+            $decoded = base64_decode($templateBlob, true);
+            if ($decoded !== false && $decoded !== '') {
+                return base64_encode($decoded);
+            }
+        }
+        return base64_encode($templateBlob);
+    }
     if (api_is_valid_base64($templateData)) {
         return $templateData;
     }
-    if (api_is_valid_base64($templateBlob)) {
-        return $templateBlob;
-    }
-    return base64_encode($templateBlob ?? '');
+    return base64_encode($templateData ?? '');
 }
 
 /**
@@ -361,14 +369,30 @@ function api_ensure_fingerprint_enrollments_table(PDO $pdo): void {
             finger_name VARCHAR(50) DEFAULT NULL,
             template LONGBLOB NOT NULL,
             template_data LONGTEXT DEFAULT NULL,
+            template_hash VARCHAR(64) DEFAULT NULL,
             image_preview VARCHAR(255) DEFAULT NULL,
             captured_at DATETIME DEFAULT NULL,
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
             updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
             UNIQUE KEY uq_regno_finger (reg_no, finger_index),
-            INDEX idx_reg_no (reg_no)
+            INDEX idx_reg_no (reg_no),
+            INDEX idx_template_hash (template_hash)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     ");
+
+    // Ensure template_hash column exists for older installs
+    try {
+        $pdo->exec("ALTER TABLE fingerprint_enrollments ADD COLUMN template_hash VARCHAR(64) DEFAULT NULL");
+    } catch (PDOException $e) {
+        // Ignore if column already exists
+    }
+
+    // Ensure index exists (ignore if already present)
+    try {
+        $pdo->exec("ALTER TABLE fingerprint_enrollments ADD INDEX idx_template_hash (template_hash)");
+    } catch (PDOException $e) {
+        // Ignore if index already exists
+    }
 }
 
 /**
@@ -384,17 +408,19 @@ function api_upsert_fingerprint_enrollment(
     ?string $fingerName,
     string $templateBytes,
     ?string $templateBase64,
+    ?string $templateHash,
     ?string $imagePreview,
     ?string $capturedAt
 ): bool {
     $stmt = $pdo->prepare("
         INSERT INTO fingerprint_enrollments
-        (reg_no, finger_index, finger_name, template, template_data, image_preview, captured_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
+        (reg_no, finger_index, finger_name, template, template_data, template_hash, image_preview, captured_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         ON DUPLICATE KEY UPDATE
         finger_name = VALUES(finger_name),
         template = VALUES(template),
         template_data = VALUES(template_data),
+        template_hash = VALUES(template_hash),
         image_preview = VALUES(image_preview),
         captured_at = VALUES(captured_at)
     ");
@@ -405,6 +431,7 @@ function api_upsert_fingerprint_enrollment(
         $fingerName,
         $templateBytes,
         $templateBase64,
+        $templateHash,
         $imagePreview,
         $capturedAt
     ]);
@@ -419,7 +446,7 @@ function api_upsert_fingerprint_enrollment(
  */
 function api_get_fingerprint_enrollments(PDO $pdo, string $regNo): array {
     $stmt = $pdo->prepare("
-        SELECT reg_no, finger_index, finger_name, template, template_data, image_preview, captured_at
+        SELECT reg_no, finger_index, finger_name, template, template_data, template_hash, image_preview, captured_at
         FROM fingerprint_enrollments
         WHERE reg_no = ?
         ORDER BY finger_index ASC
@@ -428,13 +455,28 @@ function api_get_fingerprint_enrollments(PDO $pdo, string $regNo): array {
 
     $records = [];
     while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
-        $templateBase64 = api_normalize_template_base64($row['template'] ?? null, $row['template_data'] ?? null);
+        $templateBlob = $row['template'] ?? null;
+        $templateBase64 = ($templateBlob !== null && $templateBlob !== '')
+            ? base64_encode($templateBlob)
+            : '';
+        $templateDataBase64 = $row['template_data'] ?? null;
+        if ($templateDataBase64 !== null && $templateDataBase64 !== '' && !api_is_valid_base64($templateDataBase64)) {
+            $templateDataBase64 = null;
+        }
+        if ($templateBase64 === '' && $templateDataBase64 !== null) {
+            $templateBase64 = $templateDataBase64;
+        }
+        $templateHash = $row['template_hash'] ?? null;
+        if (($templateHash === null || $templateHash === '') && $templateBlob !== null && $templateBlob !== '') {
+            $templateHash = api_hash_template($templateBlob);
+        }
         $records[] = [
             'regno' => $row['reg_no'],
             'finger_index' => (int)$row['finger_index'],
             'finger_name' => $row['finger_name'],
             'template' => $templateBase64,
-            'template_data' => $templateBase64,
+            'template_data' => $templateDataBase64,
+            'template_hash' => $templateHash,
             'image_preview' => $row['image_preview'],
             'captured_at' => $row['captured_at'],
         ];
@@ -452,20 +494,35 @@ function api_get_fingerprint_enrollments(PDO $pdo, string $regNo): array {
  */
 function api_get_all_fingerprint_enrollments(PDO $pdo): array {
     $stmt = $pdo->query("
-        SELECT reg_no, finger_index, finger_name, template, template_data, image_preview, captured_at
+        SELECT reg_no, finger_index, finger_name, template, template_data, template_hash, image_preview, captured_at
         FROM fingerprint_enrollments
         ORDER BY reg_no ASC, finger_index ASC
     ");
 
     $records = [];
     while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
-        $templateBase64 = api_normalize_template_base64($row['template'] ?? null, $row['template_data'] ?? null);
+        $templateBlob = $row['template'] ?? null;
+        $templateBase64 = ($templateBlob !== null && $templateBlob !== '')
+            ? base64_encode($templateBlob)
+            : '';
+        $templateDataBase64 = $row['template_data'] ?? null;
+        if ($templateDataBase64 !== null && $templateDataBase64 !== '' && !api_is_valid_base64($templateDataBase64)) {
+            $templateDataBase64 = null;
+        }
+        if ($templateBase64 === '' && $templateDataBase64 !== null) {
+            $templateBase64 = $templateDataBase64;
+        }
+        $templateHash = $row['template_hash'] ?? null;
+        if (($templateHash === null || $templateHash === '') && $templateBlob !== null && $templateBlob !== '') {
+            $templateHash = api_hash_template($templateBlob);
+        }
         $records[] = [
             'regno' => $row['reg_no'],
             'finger_index' => (int)$row['finger_index'],
             'finger_name' => $row['finger_name'],
             'template' => $templateBase64,
-            'template_data' => $templateBase64,
+            'template_data' => $templateDataBase64,
+            'template_hash' => $templateHash,
             'image_preview' => $row['image_preview'],
             'captured_at' => $row['captured_at'],
         ];
