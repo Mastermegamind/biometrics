@@ -23,10 +23,13 @@ public class LiveClockInViewModel : ViewModelBase
     private string _statusMessage = "Place your finger on the scanner to clock in";
     private string _templateCacheStatus = "Templates: not cached";
     private string _templateCacheLastRefresh = "Last refresh: --";
+    private string _templateCacheHint = string.Empty;
+    private bool _showTemplateCacheHint;
     private bool _isProcessing;
     private bool _isSuccess;
     private bool _showResult;
     private string? _lastCapturedTemplatePath;
+    private static readonly TimeSpan CacheStaleThreshold = TimeSpan.FromMinutes(2);
 
     public LiveClockInViewModel(IServiceRegistry services)
     {
@@ -97,6 +100,18 @@ public class LiveClockInViewModel : ViewModelBase
     {
         get => _templateCacheLastRefresh;
         set => SetProperty(ref _templateCacheLastRefresh, value);
+    }
+
+    public string TemplateCacheHint
+    {
+        get => _templateCacheHint;
+        set => SetProperty(ref _templateCacheHint, value);
+    }
+
+    public bool ShowTemplateCacheHint
+    {
+        get => _showTemplateCacheHint;
+        set => SetProperty(ref _showTemplateCacheHint, value);
     }
 
     public bool IsProcessing
@@ -184,6 +199,8 @@ public class LiveClockInViewModel : ViewModelBase
                 FingerprintImage = new Bitmap(stream);
             }
 
+            StatusMessage = "Verifying identity...";
+            await RefreshTemplateCacheAsync();
             StatusMessage = "Verifying identity...";
 
             // Create template from captured sample (or use capture template if available)
@@ -448,6 +465,67 @@ public class LiveClockInViewModel : ViewModelBase
         if (!string.IsNullOrEmpty(sync.LastSyncError))
         {
             TemplateCacheLastRefresh += $" (Error: {sync.LastSyncError})";
+        }
+
+        var now = LagosTime.Now;
+        var hasTemplates = sync.CachedTemplateCount > 0;
+        var isStale = !sync.LastSyncAt.HasValue || now - sync.LastSyncAt.Value > CacheStaleThreshold;
+
+        if (!hasTemplates)
+        {
+            TemplateCacheHint = "No templates cached. Sync required.";
+            ShowTemplateCacheHint = true;
+        }
+        else if (isStale)
+        {
+            var age = sync.LastSyncAt.HasValue ? now - sync.LastSyncAt.Value : TimeSpan.Zero;
+            TemplateCacheHint = sync.LastSyncAt.HasValue
+                ? $"Cache is {Math.Max(1, (int)age.TotalMinutes)}m old. Refresh recommended."
+                : "Cache age unknown. Refresh recommended.";
+            ShowTemplateCacheHint = true;
+        }
+        else
+        {
+            TemplateCacheHint = string.Empty;
+            ShowTemplateCacheHint = false;
+        }
+    }
+
+    private async Task RefreshTemplateCacheAsync()
+    {
+        try
+        {
+            if (_services.TemplateSync.IsSyncing)
+            {
+                UpdateTemplateCacheIndicators();
+                return;
+            }
+
+            if (!_services.Data.IsOnline)
+            {
+                await _services.Data.CheckOnlineStatusAsync();
+            }
+
+            if (!_services.Data.IsOnline)
+            {
+                UpdateTemplateCacheIndicators();
+                return;
+            }
+
+            StatusMessage = "Refreshing template cache...";
+            var result = await _services.TemplateSync.ForceSyncAsync();
+            if (!result.Success)
+            {
+                _logger.LogWarning("Template cache refresh failed: {Message}", result.Message);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Template cache refresh failed");
+        }
+        finally
+        {
+            UpdateTemplateCacheIndicators();
         }
     }
 

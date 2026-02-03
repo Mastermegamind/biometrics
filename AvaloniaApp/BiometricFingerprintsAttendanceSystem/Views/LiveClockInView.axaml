@@ -192,6 +192,12 @@
                         <TextBlock Text="{Binding TemplateCacheLastRefresh}"
                                    Foreground="#888"
                                    FontSize="10"/>
+                        <TextBlock Text="{Binding TemplateCacheHint}"
+                                   Foreground="#F59E0B"
+                                   FontSize="10"
+                                   TextWrapping="Wrap"
+                                   MaxWidth="220"
+                                   IsVisible="{Binding ShowTemplateCacheHint}"/>
                     </StackPanel>
                     <TextBlock Text="{Binding SyncModeDisplay}"
                                Foreground="#AAA"
