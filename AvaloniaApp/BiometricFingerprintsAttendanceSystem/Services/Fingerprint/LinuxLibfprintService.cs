@@ -1072,6 +1072,48 @@ public sealed class LinuxLibfprintService : FingerprintServiceBase
         return EstimateQuality(sample, 0, 0);
     }
 
+    public override async Task<MultiCaptureEnrollmentResult> EnrollFingerMultiCaptureAsync(
+        int requiredSamples = 4,
+        Action<int, int, string>? progress = null,
+        CancellationToken cancellationToken = default)
+    {
+        if (_device is null || !_device.IsOpen)
+        {
+            return MultiCaptureEnrollmentResult.Failed("Device not initialized.");
+        }
+
+        // libfprint handles multi-stage enrollment internally via fp_device_enroll_sync
+        // The enroll stages are managed by the driver
+        try
+        {
+            progress?.Invoke(1, requiredSamples, "Place finger on scanner...");
+
+            var captureResult = await CaptureAsync(cancellationToken);
+
+            if (cancellationToken.IsCancellationRequested)
+            {
+                return MultiCaptureEnrollmentResult.Cancelled();
+            }
+
+            if (!captureResult.Success || captureResult.TemplateData == null)
+            {
+                return MultiCaptureEnrollmentResult.Failed(captureResult.Message ?? "Enrollment capture failed.");
+            }
+
+            progress?.Invoke(requiredSamples, requiredSamples, "Enrollment complete!");
+            return MultiCaptureEnrollmentResult.Successful(captureResult.TemplateData, null, requiredSamples);
+        }
+        catch (OperationCanceledException)
+        {
+            return MultiCaptureEnrollmentResult.Cancelled();
+        }
+        catch (Exception ex)
+        {
+            _logger?.LogError(ex, "Multi-capture enrollment error");
+            return MultiCaptureEnrollmentResult.Failed($"Enrollment error: {ex.Message}");
+        }
+    }
+
     protected override void Dispose(bool disposing)
     {
         if (_disposed) return;

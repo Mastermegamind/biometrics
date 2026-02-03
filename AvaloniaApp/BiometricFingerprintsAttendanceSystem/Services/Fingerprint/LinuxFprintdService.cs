@@ -400,6 +400,54 @@ public sealed partial class LinuxFprintdService : FingerprintServiceBase
         return sample.Length > 0 ? 70 : 0;
     }
 
+    public override async Task<MultiCaptureEnrollmentResult> EnrollFingerMultiCaptureAsync(
+        int requiredSamples = 4,
+        Action<int, int, string>? progress = null,
+        CancellationToken cancellationToken = default)
+    {
+        // fprintd handles multi-stage enrollment internally
+        // The fprintd-enroll command prompts for multiple scans
+        try
+        {
+            progress?.Invoke(1, requiredSamples, "Starting fprintd enrollment...");
+
+            OnDeviceStatusChanged(FingerprintDeviceStatus.Capturing);
+
+            var (exitCode, output, error) = await RunCommandAsync(
+                "fprintd-enroll",
+                $"-f right-index-finger {_defaultUsername}",
+                cancellationToken,
+                timeoutSeconds: 120);
+
+            OnDeviceStatusChanged(FingerprintDeviceStatus.Ready);
+
+            if (exitCode == 0 || output.Contains("Enrollment completed", StringComparison.OrdinalIgnoreCase))
+            {
+                progress?.Invoke(requiredSamples, requiredSamples, "Enrollment complete!");
+                // fprintd stores templates in system, return empty template data
+                return MultiCaptureEnrollmentResult.Successful([], null, requiredSamples);
+            }
+
+            if (error.Contains("Not authorized", StringComparison.OrdinalIgnoreCase) ||
+                error.Contains("Permission denied", StringComparison.OrdinalIgnoreCase))
+            {
+                return MultiCaptureEnrollmentResult.Failed("Permission denied. Run with sudo or configure polkit.");
+            }
+
+            return MultiCaptureEnrollmentResult.Failed(error);
+        }
+        catch (OperationCanceledException)
+        {
+            OnDeviceStatusChanged(FingerprintDeviceStatus.Ready);
+            return MultiCaptureEnrollmentResult.Cancelled();
+        }
+        catch (Exception ex)
+        {
+            OnDeviceStatusChanged(FingerprintDeviceStatus.Error);
+            return MultiCaptureEnrollmentResult.Failed(ex.Message);
+        }
+    }
+
     private static async Task<(int exitCode, string output, string error)> RunCommandAsync(
         string command,
         string arguments,

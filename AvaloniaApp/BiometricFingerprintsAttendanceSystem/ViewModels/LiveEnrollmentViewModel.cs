@@ -37,6 +37,9 @@ public class LiveEnrollmentViewModel : ViewModelBase
     private int _enrolledCount;
     private bool _canSubmit;
     private Bitmap? _currentFingerprintImage;
+    private int _currentCaptureStep;
+    private int _totalCaptureSteps = 4;
+    private string _captureProgressMessage = string.Empty;
 
     public LiveEnrollmentViewModel(IServiceRegistry services)
     {
@@ -73,6 +76,8 @@ public class LiveEnrollmentViewModel : ViewModelBase
         CaptureFingerCommand = new AsyncRelayCommand(CaptureFingerAsync, () => IsStudentLoaded && !IsCapturing);
         SubmitEnrollmentCommand = new AsyncRelayCommand(SubmitEnrollmentAsync, () => CanSubmit && !IsLoading);
         ClearCommand = new RelayCommand(Clear);
+        SelectFingerCommand = new RelayCommand<string>(SelectFinger);
+        LaunchNativeEnrollmentCommand = new AsyncRelayCommand(LaunchNativeEnrollmentAsync, () => IsStudentLoaded && !IsLoading && IsNativeEnrollmentAvailable);
     }
 
     // ==================== Properties ====================
@@ -225,6 +230,52 @@ public class LiveEnrollmentViewModel : ViewModelBase
         set => SetProperty(ref _currentFingerprintImage, value);
     }
 
+    /// <summary>
+    /// Current capture step (1-based) during multi-capture enrollment.
+    /// </summary>
+    public int CurrentCaptureStep
+    {
+        get => _currentCaptureStep;
+        set
+        {
+            if (SetProperty(ref _currentCaptureStep, value))
+            {
+                OnPropertyChanged(nameof(CaptureProgressDisplay));
+            }
+        }
+    }
+
+    /// <summary>
+    /// Total capture steps required (typically 4).
+    /// </summary>
+    public int TotalCaptureSteps
+    {
+        get => _totalCaptureSteps;
+        set
+        {
+            if (SetProperty(ref _totalCaptureSteps, value))
+            {
+                OnPropertyChanged(nameof(CaptureProgressDisplay));
+            }
+        }
+    }
+
+    /// <summary>
+    /// Progress message during capture.
+    /// </summary>
+    public string CaptureProgressMessage
+    {
+        get => _captureProgressMessage;
+        set => SetProperty(ref _captureProgressMessage, value);
+    }
+
+    /// <summary>
+    /// Display string for capture progress (e.g., "Scan 2/4").
+    /// </summary>
+    public string CaptureProgressDisplay => IsCapturing && CurrentCaptureStep > 0
+        ? $"Scan {CurrentCaptureStep}/{TotalCaptureSteps}"
+        : string.Empty;
+
     public ObservableCollection<FingerSlotViewModel> FingerSlots { get; }
     public ObservableCollection<FingerprintTemplate> CapturedTemplates { get; }
 
@@ -237,6 +288,13 @@ public class LiveEnrollmentViewModel : ViewModelBase
     public ICommand CaptureFingerCommand { get; }
     public ICommand SubmitEnrollmentCommand { get; }
     public ICommand ClearCommand { get; }
+    public ICommand SelectFingerCommand { get; }
+    public ICommand LaunchNativeEnrollmentCommand { get; }
+
+    /// <summary>
+    /// Indicates if the native DPFP enrollment UI is available (Windows with SDK).
+    /// </summary>
+    public bool IsNativeEnrollmentAvailable => DpfpEnrollmentLauncher.IsAvailable;
 
     // ==================== Methods ====================
 
@@ -341,8 +399,10 @@ public class LiveEnrollmentViewModel : ViewModelBase
         if (slot == null) return;
 
         IsCapturing = true;
-        StatusMessage = $"Place your {slot.DisplayName} on the scanner...";
-        _logger.LogInformation("Live enrollment capture started for RegNo {RegNo}, Finger {Finger}", RegNo.Trim(), slot.Name);
+        CurrentCaptureStep = 0;
+        TotalCaptureSteps = 4;
+        StatusMessage = $"Enrolling {slot.DisplayName} - place finger on scanner...";
+        _logger.LogInformation("Live enrollment multi-capture started for RegNo {RegNo}, Finger {Finger}", RegNo.Trim(), slot.Name);
 
         try
         {
@@ -363,60 +423,50 @@ public class LiveEnrollmentViewModel : ViewModelBase
                 return;
             }
 
-            // Capture fingerprint
-            var captureResult = await _services.Fingerprint.CaptureAsync();
-            if (!captureResult.Success || captureResult.SampleData == null)
+            // Use multi-capture enrollment (4 scans per finger like the SDK)
+            var enrollResult = await _services.Fingerprint.EnrollFingerMultiCaptureAsync(
+                requiredSamples: 4,
+                progress: (current, total, message) =>
+                {
+                    // Update progress on UI thread
+                    CurrentCaptureStep = current;
+                    TotalCaptureSteps = total;
+                    CaptureProgressMessage = message;
+                    StatusMessage = $"{slot.DisplayName}: {message}";
+                });
+
+            if (!enrollResult.Success)
             {
-                StatusMessage = captureResult.Message ?? "Capture failed. Please try again.";
-                _logger.LogWarning("Live enrollment capture failed for RegNo {RegNo}: {Message}", RegNo.Trim(), captureResult.Message ?? "Capture failed");
+                if (enrollResult.ErrorMessage?.Contains("cancelled", StringComparison.OrdinalIgnoreCase) == true)
+                {
+                    StatusMessage = "Enrollment cancelled.";
+                }
+                else
+                {
+                    StatusMessage = enrollResult.ErrorMessage ?? "Enrollment failed. Please try again.";
+                }
+                _logger.LogWarning("Live enrollment multi-capture failed for RegNo {RegNo}: {Message}",
+                    RegNo.Trim(), enrollResult.ErrorMessage ?? "Unknown error");
                 return;
             }
 
-            // Create proper template from captured sample for enrollment storage
-            // Always use CreateTemplateAsync when sample data is available to ensure proper Template format
-            byte[]? templateData = null;
-            if (captureResult.SampleData is { Length: > 0 })
-            {
-                templateData = await _services.Fingerprint.CreateTemplateAsync(captureResult.SampleData);
-            }
-            // Fall back to capture's TemplateData only if CreateTemplateAsync didn't produce a result
-            if ((templateData == null || templateData.Length == 0) &&
-                captureResult.TemplateData is { Length: > 0 })
-            {
-                templateData = captureResult.TemplateData;
-                _logger.LogWarning("Live enrollment using capture TemplateData (may be FeatureSet format) for RegNo {RegNo}", RegNo.Trim());
-            }
-            // Last resort: use raw sample data
-            if ((templateData == null || templateData.Length == 0) &&
-                captureResult.SampleData != null && captureResult.SampleData.Length > 0)
-            {
-                templateData = captureResult.SampleData;
-                _logger.LogWarning("Live enrollment using sample data as template fallback for RegNo {RegNo}", RegNo.Trim());
-            }
-            if (templateData == null || templateData.Length == 0)
+            if (enrollResult.TemplateData == null || enrollResult.TemplateData.Length == 0)
             {
                 StatusMessage = "Fingerprint device did not provide a template. Enrollment not supported on this device.";
                 _logger.LogWarning("Live enrollment template creation failed for RegNo {RegNo}", RegNo.Trim());
                 return;
             }
 
-            var sampleForMatch = captureResult.SampleData is { Length: > 0 } ? captureResult.SampleData : templateData;
-            if (sampleForMatch is { Length: > 0 })
+            // Check for duplicate fingerprint against other enrolled fingers
+            var duplicate = await CheckDuplicateFingerprintAsync(RegNo.Trim(), slot.Index, enrollResult.TemplateData);
+            if (duplicate.IsDuplicate)
             {
-                var duplicate = await CheckDuplicateFingerprintAsync(RegNo.Trim(), slot.Index, sampleForMatch);
-                if (duplicate.IsDuplicate)
-                {
-                    var matchedName = GetFingerDisplayName(duplicate.FingerIndex);
-                    StatusMessage = $"This fingerprint matches an already enrolled finger ({matchedName}). Please use a different finger.";
-                    _logger.LogWarning(
-                        "Live enrollment duplicate finger detected for RegNo {RegNo}. Current={Current} Matched={Matched}",
-                        RegNo.Trim(), slot.Name, matchedName);
-                    return;
-                }
-            }
-            else
-            {
-                _logger.LogWarning("Live enrollment duplicate check skipped for RegNo {RegNo}: no sample data", RegNo.Trim());
+                var matchedName = GetFingerDisplayName(duplicate.FingerIndex);
+                StatusMessage = $"This fingerprint matches an already enrolled finger ({matchedName}). Please use a different finger.";
+                _logger.LogWarning(
+                    "Live enrollment duplicate finger detected for RegNo {RegNo}. Current={Current} Matched={Matched}",
+                    RegNo.Trim(), slot.Name, matchedName);
+                return;
             }
 
             // Store the template
@@ -424,28 +474,26 @@ public class LiveEnrollmentViewModel : ViewModelBase
             {
                 Finger = slot.Name,
                 FingerIndex = slot.Index,
-                TemplateData = templateData
+                TemplateData = enrollResult.TemplateData
             };
 
-            if (captureResult.SampleData is { Length: > 0 })
+            // Save template bytes for debugging
+            var templatePath = SaveFingerprintSampleBytes(enrollResult.TemplateData, RegNo, slot.Name);
+            if (templatePath != null)
             {
-                var samplePath = SaveFingerprintSampleBytes(captureResult.SampleData, RegNo, slot.Name);
-                if (samplePath != null)
-                {
-                    _logger.LogInformation("Saved raw fingerprint sample bytes to {Path}", samplePath);
-                }
+                _logger.LogInformation("Saved enrollment template bytes to {Path}", templatePath);
             }
 
             // Display captured image if available
-            if (captureResult.ImageData is { Length: > 0 })
+            if (enrollResult.ImageData is { Length: > 0 })
             {
-                var rawPath = SaveFingerprintImageBytes(captureResult.ImageData, RegNo, slot.Name);
+                var rawPath = SaveFingerprintImageBytes(enrollResult.ImageData, RegNo, slot.Name);
                 if (rawPath != null)
                 {
                     _logger.LogInformation("Saved fingerprint image bytes to {Path}", rawPath);
                 }
 
-                if (TryDecodeBitmap(captureResult.ImageData, out var bmp) && bmp != null)
+                if (TryDecodeBitmap(enrollResult.ImageData, out var bmp) && bmp != null)
                 {
                     CurrentFingerprintImage = bmp;
 
@@ -479,8 +527,9 @@ public class LiveEnrollmentViewModel : ViewModelBase
             slot.IsEnrolled = true;
             EnrolledCount = CapturedTemplates.Count;
 
-            StatusMessage = $"{slot.DisplayName} captured successfully! ({EnrolledCount}/{_minimumFingers})";
-            _logger.LogInformation("Live enrollment capture success for RegNo {RegNo}, Finger {Finger}", RegNo.Trim(), slot.Name);
+            StatusMessage = $"{slot.DisplayName} enrolled with {enrollResult.SamplesCollected} scans! ({EnrolledCount}/{_minimumFingers} fingers)";
+            _logger.LogInformation("Live enrollment multi-capture success for RegNo {RegNo}, Finger {Finger}, Samples={Samples}",
+                RegNo.Trim(), slot.Name, enrollResult.SamplesCollected);
 
             // Auto-select next unenrolled finger
             SelectNextFinger();
@@ -493,6 +542,8 @@ public class LiveEnrollmentViewModel : ViewModelBase
         finally
         {
             IsCapturing = false;
+            CurrentCaptureStep = 0;
+            CaptureProgressMessage = string.Empty;
         }
     }
 
@@ -550,6 +601,74 @@ public class LiveEnrollmentViewModel : ViewModelBase
         }
     }
 
+    /// <summary>
+    /// Launches the native DigitalPersona enrollment form (Windows only).
+    /// This shows the exact same 10-finger hand UI as the SDK samples.
+    /// </summary>
+    private async Task LaunchNativeEnrollmentAsync()
+    {
+        if (!IsStudentLoaded) return;
+
+        IsLoading = true;
+        StatusMessage = "Opening native enrollment window...";
+        _logger.LogInformation("Launching native DPFP enrollment for RegNo {RegNo}", RegNo.Trim());
+
+        try
+        {
+            // Get existing templates for re-enrollment
+            var existingTemplates = CapturedTemplates.ToList();
+
+            // Launch the native form
+            var result = await DpfpEnrollmentLauncher.LaunchAsync(existingTemplates, 10);
+
+            if (result.Cancelled)
+            {
+                StatusMessage = "Enrollment cancelled.";
+                _logger.LogInformation("Native enrollment cancelled for RegNo {RegNo}", RegNo.Trim());
+                return;
+            }
+
+            if (!result.Success)
+            {
+                StatusMessage = result.ErrorMessage ?? "Native enrollment failed.";
+                _logger.LogWarning("Native enrollment failed for RegNo {RegNo}: {Message}", RegNo.Trim(), result.ErrorMessage);
+                return;
+            }
+
+            // Clear existing templates and add new ones
+            CapturedTemplates.Clear();
+            foreach (var slot in FingerSlots)
+            {
+                slot.IsEnrolled = false;
+            }
+
+            foreach (var template in result.Templates)
+            {
+                CapturedTemplates.Add(template);
+
+                // Update finger slot UI
+                var slot = FingerSlots.FirstOrDefault(s => s.Index == template.FingerIndex);
+                if (slot != null)
+                {
+                    slot.IsEnrolled = true;
+                }
+            }
+
+            EnrolledCount = result.EnrolledCount;
+            StatusMessage = $"Native enrollment complete! {result.EnrolledCount} fingers enrolled.";
+            _logger.LogInformation("Native enrollment success for RegNo {RegNo}: {Count} fingers", RegNo.Trim(), result.EnrolledCount);
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = $"Error: {ex.Message}";
+            _logger.LogError(ex, "Native enrollment error for RegNo {RegNo}", RegNo.Trim());
+        }
+        finally
+        {
+            IsLoading = false;
+        }
+    }
+
     private void Clear()
     {
         RegNo = string.Empty;
@@ -573,6 +692,12 @@ public class LiveEnrollmentViewModel : ViewModelBase
 
         SelectedFinger = "LeftThumb";
         StatusMessage = "Enter registration number to begin";
+    }
+
+    private void SelectFinger(string? fingerName)
+    {
+        if (string.IsNullOrEmpty(fingerName)) return;
+        SelectedFinger = fingerName;
     }
 
     private void SelectNextFinger()

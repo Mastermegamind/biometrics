@@ -398,6 +398,130 @@ public sealed class DigitalPersonaFingerprintService : FingerprintServiceBase
 #endif
     }
 
+    public override async Task<MultiCaptureEnrollmentResult> EnrollFingerMultiCaptureAsync(
+        int requiredSamples = 4,
+        Action<int, int, string>? progress = null,
+        CancellationToken cancellationToken = default)
+    {
+#if DIGITALPERSONA_SDK
+        if (_capture is null)
+        {
+            return MultiCaptureEnrollmentResult.Failed("Device not initialized.");
+        }
+
+        var enrollment = new Enrollment();
+        int samplesCollected = 0;
+        byte[]? lastImageData = null;
+
+        try
+        {
+            while (enrollment.TemplateStatus != DPFP.Processing.Enrollment.Status.Ready && !cancellationToken.IsCancellationRequested)
+            {
+                // Report progress
+                progress?.Invoke(samplesCollected + 1, requiredSamples, $"Place finger on scanner ({samplesCollected + 1}/{requiredSamples})...");
+
+                // Capture a sample
+                var captureResult = await CaptureAsync(cancellationToken);
+
+                if (cancellationToken.IsCancellationRequested)
+                {
+                    return MultiCaptureEnrollmentResult.Cancelled(samplesCollected);
+                }
+
+                if (!captureResult.Success || captureResult.SampleData == null)
+                {
+                    // Report the error but continue - user can try again
+                    progress?.Invoke(samplesCollected + 1, requiredSamples, captureResult.Message ?? "Capture failed. Try again...");
+                    continue;
+                }
+
+                // Extract features for enrollment
+                try
+                {
+                    using var stream = new MemoryStream(captureResult.SampleData);
+                    var sample = new Sample(stream);
+                    var featureExtractor = new FeatureExtraction();
+                    var features = new FeatureSet();
+                    var feedback = CaptureFeedback.None;
+
+                    featureExtractor.CreateFeatureSet(sample, DataPurpose.Enrollment, ref feedback, ref features);
+
+                    if (feedback != CaptureFeedback.Good)
+                    {
+                        var feedbackMessage = feedback switch
+                        {
+                            CaptureFeedback.TooLight => "Too light - press harder",
+                            CaptureFeedback.TooNoisy => "Too noisy - clean sensor",
+                            CaptureFeedback.LowContrast => "Low contrast - adjust position",
+                            CaptureFeedback.NotEnoughFeatures => "Not enough features - try again",
+                            CaptureFeedback.TooSmall => "Too small - center finger",
+                            CaptureFeedback.TooShort => "Swipe too short",
+                            CaptureFeedback.TooSlow => "Swipe too slow",
+                            CaptureFeedback.TooFast => "Swipe too fast",
+                            CaptureFeedback.TooSkewed => "Finger too skewed",
+                            _ => "Poor quality - try again"
+                        };
+                        progress?.Invoke(samplesCollected + 1, requiredSamples, feedbackMessage);
+                        continue;
+                    }
+
+                    // Add features to enrollment (this is the key difference - each sample is DIFFERENT)
+                    enrollment.AddFeatures(features);
+                    samplesCollected++;
+
+                    // Store image from last successful capture
+                    if (captureResult.ImageData != null)
+                    {
+                        lastImageData = captureResult.ImageData;
+                    }
+
+                    // Report successful capture
+                    if (enrollment.TemplateStatus == DPFP.Processing.Enrollment.Status.Ready)
+                    {
+                        progress?.Invoke(samplesCollected, requiredSamples, "Enrollment complete!");
+                    }
+                    else
+                    {
+                        var remaining = requiredSamples - samplesCollected;
+                        progress?.Invoke(samplesCollected, requiredSamples, $"Good! {remaining} more scan{(remaining == 1 ? "" : "s")} needed. Remove and place finger again...");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    progress?.Invoke(samplesCollected + 1, requiredSamples, $"Error processing: {ex.Message}");
+                    continue;
+                }
+            }
+
+            if (cancellationToken.IsCancellationRequested)
+            {
+                return MultiCaptureEnrollmentResult.Cancelled(samplesCollected);
+            }
+
+            if (enrollment.TemplateStatus != DPFP.Processing.Enrollment.Status.Ready)
+            {
+                return MultiCaptureEnrollmentResult.Failed($"Enrollment incomplete. Only {samplesCollected} samples collected.", samplesCollected);
+            }
+
+            // Serialize the completed template
+            using var outputStream = new MemoryStream();
+            enrollment.Template.Serialize(outputStream);
+            return MultiCaptureEnrollmentResult.Successful(outputStream.ToArray(), lastImageData, samplesCollected);
+        }
+        catch (OperationCanceledException)
+        {
+            return MultiCaptureEnrollmentResult.Cancelled(samplesCollected);
+        }
+        catch (Exception ex)
+        {
+            return MultiCaptureEnrollmentResult.Failed($"Enrollment error: {ex.Message}", samplesCollected);
+        }
+#else
+        await Task.CompletedTask;
+        return MultiCaptureEnrollmentResult.Failed("DigitalPersona SDK not available. Rebuild with IncludeFingerprintSdks=true.");
+#endif
+    }
+
 #if DIGITALPERSONA_SDK
     // DPFP.Capture.EventHandler implementation
 

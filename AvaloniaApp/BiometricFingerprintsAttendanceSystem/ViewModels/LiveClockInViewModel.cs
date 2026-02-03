@@ -1,5 +1,6 @@
 using System.Windows.Input;
 using System.Text;
+using System.Security.Cryptography;
 using Avalonia.Media.Imaging;
 using BiometricFingerprintsAttendanceSystem.Services;
 using BiometricFingerprintsAttendanceSystem.Services.Data;
@@ -25,6 +26,7 @@ public class LiveClockInViewModel : ViewModelBase
     private bool _isProcessing;
     private bool _isSuccess;
     private bool _showResult;
+    private string? _lastCapturedTemplatePath;
 
     public LiveClockInViewModel(IServiceRegistry services)
     {
@@ -33,6 +35,7 @@ public class LiveClockInViewModel : ViewModelBase
             ?? NullLogger<LiveClockInViewModel>.Instance;
 
         ClockInCommand = new AsyncRelayCommand(ProcessClockInAsync, () => !IsProcessing);
+        DebugCompareTemplatesCommand = new AsyncRelayCommand(DebugCompareTemplatesAsync, () => !IsProcessing);
         ResetCommand = new RelayCommand(Reset);
 
         // Auto-start scanning when view is loaded
@@ -128,6 +131,7 @@ public class LiveClockInViewModel : ViewModelBase
     // ==================== Commands ====================
 
     public ICommand ClockInCommand { get; }
+    public ICommand DebugCompareTemplatesCommand { get; }
     public ICommand ResetCommand { get; }
 
     // ==================== Methods ====================
@@ -201,7 +205,7 @@ public class LiveClockInViewModel : ViewModelBase
                 return;
             }
 
-            SaveClockInTemplate(templateData, "unknown", "captured");
+            _lastCapturedTemplatePath = SaveClockInTemplate(templateData, "unknown", "captured");
 
             var clockInRequest = new ClockInRequest
             {
@@ -341,7 +345,7 @@ public class LiveClockInViewModel : ViewModelBase
         }
     }
 
-    private void SaveClockInTemplate(byte[] templateData, string regNo, string source)
+    private string? SaveClockInTemplate(byte[] templateData, string regNo, string source)
     {
         try
         {
@@ -359,10 +363,12 @@ public class LiveClockInViewModel : ViewModelBase
             File.WriteAllText(b64Path, Convert.ToBase64String(templateData), Encoding.ASCII);
 
             _logger.LogInformation("Saved clock-in template to {BinPath}", binPath);
+            return binPath;
         }
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "Failed to save clock-in template to disk");
+            return null;
         }
     }
 
@@ -380,6 +386,61 @@ public class LiveClockInViewModel : ViewModelBase
             builder.Append(invalid.Contains(ch) ? '_' : ch);
         }
         return builder.ToString();
+    }
+
+    private async Task DebugCompareTemplatesAsync()
+    {
+        try
+        {
+            var capturedPath = _lastCapturedTemplatePath;
+            if (string.IsNullOrWhiteSpace(capturedPath) || !File.Exists(capturedPath))
+            {
+                capturedPath = TryGetLatestCapturedTemplatePath();
+            }
+
+            if (string.IsNullOrWhiteSpace(capturedPath) || !File.Exists(capturedPath))
+            {
+                _logger.LogWarning("Debug compare: no captured template file found");
+                return;
+            }
+
+            var capturedBytes = await File.ReadAllBytesAsync(capturedPath);
+            var capturedHash = ComputeSha256Hex(capturedBytes);
+            _logger.LogInformation("Debug compare: captured template {Path} bytes={Bytes} sha256={Hash}",
+                capturedPath, capturedBytes.Length, capturedHash);
+
+            var cachedTemplates = await _services.TemplateSync.GetAllCachedTemplatesAsync();
+            if (cachedTemplates.Count == 0)
+            {
+                _logger.LogWarning("Debug compare: no cached templates available");
+                return;
+            }
+
+            var matches = new List<string>();
+            foreach (var t in cachedTemplates)
+            {
+                var hash = ComputeSha256Hex(t.TemplateData);
+                if (hash == capturedHash)
+                {
+                    matches.Add($"{t.RegNo}:{t.FingerName}:{t.FingerIndex}");
+                }
+            }
+
+            if (matches.Count > 0)
+            {
+                _logger.LogInformation("Debug compare: captured hash matches {Count} cached template(s): {Matches}",
+                    matches.Count, string.Join(", ", matches));
+            }
+            else
+            {
+                _logger.LogWarning("Debug compare: captured hash did not match any cached template (count={Count})",
+                    cachedTemplates.Count);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Debug compare failed");
+        }
     }
 
     private void Reset()
@@ -423,6 +484,35 @@ public class LiveClockInViewModel : ViewModelBase
         {
             TemplateCacheLastRefresh += $" (Error: {sync.LastSyncError})";
         }
+    }
+
+    private static string? TryGetLatestCapturedTemplatePath()
+    {
+        try
+        {
+            var baseDir = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+            var dir = Path.Combine(baseDir, "BiometricFingerprintsAttendanceSystem", "cache", "clockin-templates");
+            if (!Directory.Exists(dir))
+            {
+                return null;
+            }
+
+            var latest = Directory.GetFiles(dir, "clockin_*_captured_*_*.bin")
+                .Select(p => new FileInfo(p))
+                .OrderByDescending(f => f.LastWriteTimeUtc)
+                .FirstOrDefault();
+            return latest?.FullName;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private static string ComputeSha256Hex(byte[] data)
+    {
+        var hash = SHA256.HashData(data);
+        return Convert.ToHexString(hash);
     }
 }
 

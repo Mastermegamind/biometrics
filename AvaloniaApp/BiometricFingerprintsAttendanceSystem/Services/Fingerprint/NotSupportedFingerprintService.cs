@@ -51,4 +51,10 @@ public sealed class NotSupportedFingerprintService : FingerprintServiceBase
         => throw new NotSupportedException("Fingerprint SDK is not configured.");
 
     public override int GetSampleQuality(byte[] sample) => 0;
+
+    public override Task<MultiCaptureEnrollmentResult> EnrollFingerMultiCaptureAsync(
+        int requiredSamples = 4,
+        Action<int, int, string>? progress = null,
+        CancellationToken cancellationToken = default)
+        => Task.FromResult(MultiCaptureEnrollmentResult.Failed("Fingerprint SDK is not configured."));
 }

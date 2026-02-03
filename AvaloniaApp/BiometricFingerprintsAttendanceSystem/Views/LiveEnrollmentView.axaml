@@ -91,18 +91,46 @@
             <Setter Property="Margin" Value="0,0,0,16"/>
         </Style>
 
-        <!-- Radio Button Modern Style -->
-        <Style Selector="RadioButton.finger-select">
-            <Setter Property="Padding" Value="12,10"/>
-            <Setter Property="Margin" Value="0,0,0,8"/>
-            <Setter Property="BorderThickness" Value="1"/>
-            <Setter Property="BorderBrush" Value="#E2E8F0"/>
-            <Setter Property="CornerRadius" Value="8"/>
-            <Setter Property="Background" Value="White"/>
+        <!-- Finger Button Base Style -->
+        <Style Selector="Button.finger-btn">
+            <Setter Property="Width" Value="36"/>
+            <Setter Property="Height" Value="36"/>
+            <Setter Property="CornerRadius" Value="18"/>
+            <Setter Property="Padding" Value="0"/>
+            <Setter Property="BorderThickness" Value="3"/>
+            <Setter Property="BorderBrush" Value="#CBD5E1"/>
+            <Setter Property="Background" Value="#F1F5F9"/>
+            <Setter Property="Foreground" Value="#64748B"/>
+            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="FontWeight" Value="Bold"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="HorizontalContentAlignment" Value="Center"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
         </Style>
-        <Style Selector="RadioButton.finger-select:checked">
-            <Setter Property="Background" Value="#EFF6FF"/>
+        <Style Selector="Button.finger-btn:pointerover">
             <Setter Property="BorderBrush" Value="#2563EB"/>
+            <Setter Property="Background" Value="#EFF6FF"/>
+        </Style>
+
+        <!-- Finger Button Selected State -->
+        <Style Selector="Button.finger-btn.selected">
+            <Setter Property="BorderBrush" Value="#2563EB"/>
+            <Setter Property="Background" Value="#2563EB"/>
+            <Setter Property="Foreground" Value="White"/>
+        </Style>
+
+        <!-- Finger Button Enrolled State -->
+        <Style Selector="Button.finger-btn.enrolled">
+            <Setter Property="BorderBrush" Value="#10B981"/>
+            <Setter Property="Background" Value="#10B981"/>
+            <Setter Property="Foreground" Value="White"/>
+        </Style>
+
+        <!-- Finger Button Enrolled + Selected State -->
+        <Style Selector="Button.finger-btn.enrolled.selected">
+            <Setter Property="BorderBrush" Value="#059669"/>
+            <Setter Property="Background" Value="#059669"/>
+            <Setter Property="Foreground" Value="White"/>
         </Style>
     </UserControl.Styles>
 
@@ -256,129 +284,384 @@
                     Margin="12,0">
                 <Grid RowDefinitions="Auto,*,Auto">
 
-                    <!-- Finger Selection -->
+                    <!-- Finger Selection - Visual Hand Diagram -->
                     <StackPanel Grid.Row="0" Margin="0,0,0,24">
                         <TextBlock Text="Select Finger to Enroll"
-                                   Classes="section-title"/>
+                                   Classes="section-title"
+                                   HorizontalAlignment="Center"/>
 
-                        <Grid ColumnDefinitions="*,*">
-                            <!-- Left Hand -->
-                            <Border Grid.Column="0"
-                                    Background="#F8FAFC"
-                                    CornerRadius="8"
-                                    Padding="16">
-                                <StackPanel>
-                                    <TextBlock Text="Left Hand"
-                                               FontWeight="SemiBold"
-                                               FontSize="14"
-                                               Foreground="#475569"
+                        <!-- Hand Diagram Container -->
+                        <Border Background="#F8FAFC"
+                                CornerRadius="12"
+                                Padding="24,16"
+                                HorizontalAlignment="Center">
+                            <Grid ColumnDefinitions="Auto,40,Auto">
+
+                                <!-- LEFT HAND -->
+                                <StackPanel Grid.Column="0" Spacing="8">
+                                    <TextBlock Text="LEFT HAND"
+                                               FontWeight="Bold"
+                                               FontSize="12"
+                                               Foreground="#64748B"
                                                HorizontalAlignment="Center"
-                                               Margin="0,0,0,12"/>
-                                    <ItemsControl ItemsSource="{Binding FingerSlots}">
-                                        <ItemsControl.ItemsPanel>
-                                            <ItemsPanelTemplate>
-                                                <StackPanel Spacing="4"/>
-                                            </ItemsPanelTemplate>
-                                        </ItemsControl.ItemsPanel>
-                                        <ItemsControl.ItemTemplate>
-                                            <DataTemplate>
-                                                <RadioButton Content="{Binding DisplayName}"
-                                                             Classes="finger-select"
-                                                             GroupName="FingerSelection"
-                                                             IsChecked="{Binding IsSelected, Mode=TwoWay}"
-                                                             IsVisible="{Binding Name, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
-                                                    <RadioButton.IsVisible>
-                                                        <MultiBinding Converter="{x:Static BoolConverters.And}">
-                                                            <Binding Path="Name" Converter="{x:Static StringConverters.IsNotNullOrEmpty}"/>
-                                                        </MultiBinding>
-                                                    </RadioButton.IsVisible>
-                                                </RadioButton>
-                                            </DataTemplate>
-                                        </ItemsControl.ItemTemplate>
-                                    </ItemsControl>
-                                </StackPanel>
-                            </Border>
+                                               Margin="0,0,0,8"/>
 
-                            <!-- Right Hand -->
-                            <Border Grid.Column="1"
-                                    Background="#F8FAFC"
-                                    CornerRadius="8"
-                                    Padding="16">
-                                <StackPanel>
-                                    <TextBlock Text="Right Hand"
-                                               FontWeight="SemiBold"
-                                               FontSize="14"
-                                               Foreground="#475569"
+                                    <!-- Left Hand Visual -->
+                                    <Canvas Width="140" Height="200">
+                                        <!-- Hand Palm Shape -->
+                                        <Border Canvas.Left="20" Canvas.Top="80"
+                                                Width="100" Height="120"
+                                                Background="#E2E8F0"
+                                                CornerRadius="20,20,30,30"
+                                                Opacity="0.5"/>
+
+                                        <!-- Left Little (Pinky) - Index 10 -->
+                                        <Button Canvas.Left="8" Canvas.Top="55"
+                                                Classes="finger-btn"
+                                                Classes.selected="{Binding FingerSlots[4].IsSelected}"
+                                                Classes.enrolled="{Binding FingerSlots[4].IsEnrolled}"
+                                                Command="{Binding SelectFingerCommand}"
+                                                CommandParameter="LeftLittle"
+                                                ToolTip.Tip="Left Little Finger">
+                                            <TextBlock Text="5" FontSize="11" FontWeight="Bold"/>
+                                        </Button>
+                                        <Border Canvas.Left="14" Canvas.Top="91"
+                                                Width="24" Height="50"
+                                                Background="#E2E8F0"
+                                                CornerRadius="12,12,0,0"
+                                                Opacity="0.5"/>
+
+                                        <!-- Left Ring - Index 9 -->
+                                        <Button Canvas.Left="32" Canvas.Top="25"
+                                                Classes="finger-btn"
+                                                Classes.selected="{Binding FingerSlots[3].IsSelected}"
+                                                Classes.enrolled="{Binding FingerSlots[3].IsEnrolled}"
+                                                Command="{Binding SelectFingerCommand}"
+                                                CommandParameter="LeftRing"
+                                                ToolTip.Tip="Left Ring Finger">
+                                            <TextBlock Text="4" FontSize="11" FontWeight="Bold"/>
+                                        </Button>
+                                        <Border Canvas.Left="38" Canvas.Top="61"
+                                                Width="24" Height="60"
+                                                Background="#E2E8F0"
+                                                CornerRadius="12,12,0,0"
+                                                Opacity="0.5"/>
+
+                                        <!-- Left Middle - Index 8 -->
+                                        <Button Canvas.Left="58" Canvas.Top="8"
+                                                Classes="finger-btn"
+                                                Classes.selected="{Binding FingerSlots[2].IsSelected}"
+                                                Classes.enrolled="{Binding FingerSlots[2].IsEnrolled}"
+                                                Command="{Binding SelectFingerCommand}"
+                                                CommandParameter="LeftMiddle"
+                                                ToolTip.Tip="Left Middle Finger">
+                                            <TextBlock Text="3" FontSize="11" FontWeight="Bold"/>
+                                        </Button>
+                                        <Border Canvas.Left="64" Canvas.Top="44"
+                                                Width="24" Height="70"
+                                                Background="#E2E8F0"
+                                                CornerRadius="12,12,0,0"
+                                                Opacity="0.5"/>
+
+                                        <!-- Left Index - Index 7 -->
+                                        <Button Canvas.Left="84" Canvas.Top="25"
+                                                Classes="finger-btn"
+                                                Classes.selected="{Binding FingerSlots[1].IsSelected}"
+                                                Classes.enrolled="{Binding FingerSlots[1].IsEnrolled}"
+                                                Command="{Binding SelectFingerCommand}"
+                                                CommandParameter="LeftIndex"
+                                                ToolTip.Tip="Left Index Finger">
+                                            <TextBlock Text="2" FontSize="11" FontWeight="Bold"/>
+                                        </Button>
+                                        <Border Canvas.Left="90" Canvas.Top="61"
+                                                Width="24" Height="55"
+                                                Background="#E2E8F0"
+                                                CornerRadius="12,12,0,0"
+                                                Opacity="0.5"/>
+
+                                        <!-- Left Thumb - Index 6 -->
+                                        <Button Canvas.Left="108" Canvas.Top="100"
+                                                Classes="finger-btn"
+                                                Classes.selected="{Binding FingerSlots[0].IsSelected}"
+                                                Classes.enrolled="{Binding FingerSlots[0].IsEnrolled}"
+                                                Command="{Binding SelectFingerCommand}"
+                                                CommandParameter="LeftThumb"
+                                                ToolTip.Tip="Left Thumb">
+                                            <TextBlock Text="1" FontSize="11" FontWeight="Bold"/>
+                                        </Button>
+                                        <Border Canvas.Left="114" Canvas.Top="136"
+                                                Width="24" Height="40"
+                                                Background="#E2E8F0"
+                                                CornerRadius="12"
+                                                Opacity="0.5"
+                                                RenderTransformOrigin="0.5,0.5">
+                                            <Border.RenderTransform>
+                                                <RotateTransform Angle="-30"/>
+                                            </Border.RenderTransform>
+                                        </Border>
+                                    </Canvas>
+                                </StackPanel>
+
+                                <!-- Divider -->
+                                <Border Grid.Column="1"
+                                        Width="2"
+                                        Background="#E2E8F0"
+                                        VerticalAlignment="Stretch"
+                                        Margin="0,30"/>
+
+                                <!-- RIGHT HAND -->
+                                <StackPanel Grid.Column="2" Spacing="8">
+                                    <TextBlock Text="RIGHT HAND"
+                                               FontWeight="Bold"
+                                               FontSize="12"
+                                               Foreground="#64748B"
                                                HorizontalAlignment="Center"
-                                               Margin="0,0,0,12"/>
-                                    <!-- Right hand fingers would go here if needed -->
-                                </StackPanel>
-                            </Border>
-                        </Grid>
+                                               Margin="0,0,0,8"/>
 
-                        <!-- Quick Select Buttons -->
-                        <WrapPanel HorizontalAlignment="Center" 
-                                   Margin="0,16,0,0">
-                            <RadioButton Content="Left Thumb" 
-                                         GroupName="Fingers"
-                                         Classes="finger-select"
-                                         Margin="4"/>
-                            <RadioButton Content="Right Thumb" 
-                                         GroupName="Fingers"
-                                         Classes="finger-select"
-                                         Margin="4"/>
-                            <RadioButton Content="Left Index" 
-                                         GroupName="Fingers"
-                                         Classes="finger-select"
-                                         Margin="4"/>
-                            <RadioButton Content="Right Index" 
-                                         GroupName="Fingers"
-                                         Classes="finger-select"
-                                         Margin="4"/>
-                        </WrapPanel>
+                                    <!-- Right Hand Visual (Mirrored) -->
+                                    <Canvas Width="140" Height="200">
+                                        <!-- Hand Palm Shape -->
+                                        <Border Canvas.Left="20" Canvas.Top="80"
+                                                Width="100" Height="120"
+                                                Background="#E2E8F0"
+                                                CornerRadius="20,20,30,30"
+                                                Opacity="0.5"/>
+
+                                        <!-- Right Thumb - Index 1 -->
+                                        <Button Canvas.Left="8" Canvas.Top="100"
+                                                Classes="finger-btn"
+                                                Classes.selected="{Binding FingerSlots[5].IsSelected}"
+                                                Classes.enrolled="{Binding FingerSlots[5].IsEnrolled}"
+                                                Command="{Binding SelectFingerCommand}"
+                                                CommandParameter="RightThumb"
+                                                ToolTip.Tip="Right Thumb">
+                                            <TextBlock Text="1" FontSize="11" FontWeight="Bold"/>
+                                        </Button>
+                                        <Border Canvas.Left="2" Canvas.Top="136"
+                                                Width="24" Height="40"
+                                                Background="#E2E8F0"
+                                                CornerRadius="12"
+                                                Opacity="0.5"
+                                                RenderTransformOrigin="0.5,0.5">
+                                            <Border.RenderTransform>
+                                                <RotateTransform Angle="30"/>
+                                            </Border.RenderTransform>
+                                        </Border>
+
+                                        <!-- Right Index - Index 2 -->
+                                        <Button Canvas.Left="32" Canvas.Top="25"
+                                                Classes="finger-btn"
+                                                Classes.selected="{Binding FingerSlots[6].IsSelected}"
+                                                Classes.enrolled="{Binding FingerSlots[6].IsEnrolled}"
+                                                Command="{Binding SelectFingerCommand}"
+                                                CommandParameter="RightIndex"
+                                                ToolTip.Tip="Right Index Finger">
+                                            <TextBlock Text="2" FontSize="11" FontWeight="Bold"/>
+                                        </Button>
+                                        <Border Canvas.Left="38" Canvas.Top="61"
+                                                Width="24" Height="55"
+                                                Background="#E2E8F0"
+                                                CornerRadius="12,12,0,0"
+                                                Opacity="0.5"/>
+
+                                        <!-- Right Middle - Index 3 -->
+                                        <Button Canvas.Left="58" Canvas.Top="8"
+                                                Classes="finger-btn"
+                                                Classes.selected="{Binding FingerSlots[7].IsSelected}"
+                                                Classes.enrolled="{Binding FingerSlots[7].IsEnrolled}"
+                                                Command="{Binding SelectFingerCommand}"
+                                                CommandParameter="RightMiddle"
+                                                ToolTip.Tip="Right Middle Finger">
+                                            <TextBlock Text="3" FontSize="11" FontWeight="Bold"/>
+                                        </Button>
+                                        <Border Canvas.Left="64" Canvas.Top="44"
+                                                Width="24" Height="70"
+                                                Background="#E2E8F0"
+                                                CornerRadius="12,12,0,0"
+                                                Opacity="0.5"/>
+
+                                        <!-- Right Ring - Index 4 -->
+                                        <Button Canvas.Left="84" Canvas.Top="25"
+                                                Classes="finger-btn"
+                                                Classes.selected="{Binding FingerSlots[8].IsSelected}"
+                                                Classes.enrolled="{Binding FingerSlots[8].IsEnrolled}"
+                                                Command="{Binding SelectFingerCommand}"
+                                                CommandParameter="RightRing"
+                                                ToolTip.Tip="Right Ring Finger">
+                                            <TextBlock Text="4" FontSize="11" FontWeight="Bold"/>
+                                        </Button>
+                                        <Border Canvas.Left="90" Canvas.Top="61"
+                                                Width="24" Height="60"
+                                                Background="#E2E8F0"
+                                                CornerRadius="12,12,0,0"
+                                                Opacity="0.5"/>
+
+                                        <!-- Right Little (Pinky) - Index 5 -->
+                                        <Button Canvas.Left="108" Canvas.Top="55"
+                                                Classes="finger-btn"
+                                                Classes.selected="{Binding FingerSlots[9].IsSelected}"
+                                                Classes.enrolled="{Binding FingerSlots[9].IsEnrolled}"
+                                                Command="{Binding SelectFingerCommand}"
+                                                CommandParameter="RightLittle"
+                                                ToolTip.Tip="Right Little Finger">
+                                            <TextBlock Text="5" FontSize="11" FontWeight="Bold"/>
+                                        </Button>
+                                        <Border Canvas.Left="114" Canvas.Top="91"
+                                                Width="24" Height="50"
+                                                Background="#E2E8F0"
+                                                CornerRadius="12,12,0,0"
+                                                Opacity="0.5"/>
+                                    </Canvas>
+                                </StackPanel>
+                            </Grid>
+                        </Border>
+
+                        <!-- Legend -->
+                        <StackPanel Orientation="Horizontal"
+                                    HorizontalAlignment="Center"
+                                    Margin="0,16,0,0"
+                                    Spacing="24">
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <Ellipse Width="16" Height="16" Fill="#F1F5F9" Stroke="#CBD5E1" StrokeThickness="2"/>
+                                <TextBlock Text="Not Enrolled" FontSize="12" Foreground="#64748B" VerticalAlignment="Center"/>
+                            </StackPanel>
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <Ellipse Width="16" Height="16" Fill="#2563EB"/>
+                                <TextBlock Text="Selected" FontSize="12" Foreground="#64748B" VerticalAlignment="Center"/>
+                            </StackPanel>
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <Ellipse Width="16" Height="16" Fill="#10B981"/>
+                                <TextBlock Text="Enrolled" FontSize="12" Foreground="#64748B" VerticalAlignment="Center"/>
+                            </StackPanel>
+                        </StackPanel>
+
+                        <!-- Selected Finger Display -->
+                        <Border Background="#EFF6FF"
+                                CornerRadius="8"
+                                Padding="16,10"
+                                HorizontalAlignment="Center"
+                                Margin="0,12,0,0">
+                            <TextBlock FontSize="14" Foreground="#1E40AF" FontWeight="SemiBold">
+                                <TextBlock.Text>
+                                    <MultiBinding StringFormat="Selected: {0}">
+                                        <Binding Path="SelectedFinger"/>
+                                    </MultiBinding>
+                                </TextBlock.Text>
+                            </TextBlock>
+                        </Border>
                     </StackPanel>
 
                     <!-- Fingerprint Preview -->
-                    <Border Grid.Row="1"
-                            Background="#FAFAFA"
-                            BorderBrush="#E2E8F0"
-                            BorderThickness="2"
-                            CornerRadius="12"
-                            HorizontalAlignment="Center"
-                            VerticalAlignment="Center"
-                            Width="240" 
-                            Height="280"
-                            ClipToBounds="True">
-                        <Grid>
-                            <Image Source="{Binding CurrentFingerprintImage}"
-                                   Stretch="Uniform"
-                                   Margin="16"/>
-                            <StackPanel HorizontalAlignment="Center"
-                                        VerticalAlignment="Center"
-                                        IsVisible="{Binding CurrentFingerprintImage, Converter={x:Static ObjectConverters.IsNull}}">
-                                <TextBlock Text="👆"
-                                           FontSize="64"
-                                           HorizontalAlignment="Center"
-                                           Opacity="0.2"/>
-                                <TextBlock Text="Place finger on scanner"
-                                           HorizontalAlignment="Center"
-                                           Foreground="#94A3B8"
-                                           FontSize="14"
-                                           Margin="0,12,0,0"/>
-                            </StackPanel>
-                        </Grid>
-                    </Border>
+                    <Grid Grid.Row="1" VerticalAlignment="Center">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="*"/>
+                        </Grid.RowDefinitions>
 
-                    <!-- Capture Button -->
-                    <Button Grid.Row="2"
-                            Content="Capture Fingerprint"
-                            Classes="primary"
-                            Command="{Binding CaptureFingerCommand}"
-                            HorizontalAlignment="Center"
-                            Padding="40,16"
-                            FontSize="16"
-                            Margin="0,24,0,0"
-                            IsEnabled="{Binding IsStudentLoaded}"/>
+                        <!-- Capture Progress Indicator (shown during multi-capture) -->
+                        <Border Grid.Row="0"
+                                Background="#FEF3C7"
+                                BorderBrush="#F59E0B"
+                                BorderThickness="1"
+                                CornerRadius="8"
+                                Padding="16,12"
+                                Margin="0,0,0,16"
+                                HorizontalAlignment="Center"
+                                IsVisible="{Binding IsCapturing}">
+                            <StackPanel Spacing="8">
+                                <TextBlock Text="{Binding CaptureProgressDisplay}"
+                                           FontSize="18"
+                                           FontWeight="Bold"
+                                           Foreground="#B45309"
+                                           HorizontalAlignment="Center"/>
+                                <TextBlock Text="{Binding CaptureProgressMessage}"
+                                           FontSize="13"
+                                           Foreground="#92400E"
+                                           HorizontalAlignment="Center"
+                                           TextWrapping="Wrap"
+                                           MaxWidth="280"/>
+                                <!-- Progress dots -->
+                                <StackPanel Orientation="Horizontal"
+                                            HorizontalAlignment="Center"
+                                            Spacing="8"
+                                            Margin="0,4,0,0">
+                                    <Ellipse Width="12" Height="12"
+                                             Fill="{Binding CurrentCaptureStep, Converter={StaticResource StepToColorConverter}, ConverterParameter=1}"/>
+                                    <Ellipse Width="12" Height="12"
+                                             Fill="{Binding CurrentCaptureStep, Converter={StaticResource StepToColorConverter}, ConverterParameter=2}"/>
+                                    <Ellipse Width="12" Height="12"
+                                             Fill="{Binding CurrentCaptureStep, Converter={StaticResource StepToColorConverter}, ConverterParameter=3}"/>
+                                    <Ellipse Width="12" Height="12"
+                                             Fill="{Binding CurrentCaptureStep, Converter={StaticResource StepToColorConverter}, ConverterParameter=4}"/>
+                                </StackPanel>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- Fingerprint Image -->
+                        <Border Grid.Row="1"
+                                Background="#FAFAFA"
+                                BorderBrush="#E2E8F0"
+                                BorderThickness="2"
+                                CornerRadius="12"
+                                HorizontalAlignment="Center"
+                                VerticalAlignment="Center"
+                                Width="240"
+                                Height="280"
+                                ClipToBounds="True">
+                            <Grid>
+                                <Image Source="{Binding CurrentFingerprintImage}"
+                                       Stretch="Uniform"
+                                       Margin="16"/>
+                                <StackPanel HorizontalAlignment="Center"
+                                            VerticalAlignment="Center"
+                                            IsVisible="{Binding CurrentFingerprintImage, Converter={x:Static ObjectConverters.IsNull}}">
+                                    <TextBlock Text="👆"
+                                               FontSize="64"
+                                               HorizontalAlignment="Center"
+                                               Opacity="0.2"/>
+                                    <TextBlock Text="Place finger on scanner"
+                                               HorizontalAlignment="Center"
+                                               Foreground="#94A3B8"
+                                               FontSize="14"
+                                               Margin="0,12,0,0"/>
+                                </StackPanel>
+                            </Grid>
+                        </Border>
+                    </Grid>
+
+                    <!-- Capture Buttons -->
+                    <StackPanel Grid.Row="2"
+                                HorizontalAlignment="Center"
+                                Spacing="12"
+                                Margin="0,24,0,0">
+
+                        <!-- Native SDK Enrollment Button (Windows only) -->
+                        <Button Content="Open SDK Enrollment Window"
+                                Classes="primary"
+                                Command="{Binding LaunchNativeEnrollmentCommand}"
+                                HorizontalAlignment="Center"
+                                Padding="40,16"
+                                FontSize="16"
+                                IsVisible="{Binding IsNativeEnrollmentAvailable}"
+                                IsEnabled="{Binding IsStudentLoaded}"
+                                ToolTip.Tip="Opens the native DigitalPersona 10-finger enrollment window"/>
+
+                        <!-- Manual Capture Button (4-scan enrollment) -->
+                        <Button Content="Enroll Finger (4 scans)"
+                                Classes="secondary"
+                                Command="{Binding CaptureFingerCommand}"
+                                HorizontalAlignment="Center"
+                                Padding="32,12"
+                                FontSize="14"
+                                IsEnabled="{Binding IsStudentLoaded}"
+                                ToolTip.Tip="Enrolls the selected finger with 4 scans for better accuracy (same as SDK)"/>
+
+                        <!-- Help text -->
+                        <TextBlock Text="Both options require 4 scans per finger for accurate enrollment"
+                                   FontSize="11"
+                                   Foreground="#94A3B8"
+                                   HorizontalAlignment="Center"/>
+                    </StackPanel>
                 </Grid>
             </Border>
 

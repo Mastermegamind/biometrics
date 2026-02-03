@@ -175,3 +175,41 @@ public class InverseBoolConverter : IValueConverter
         return false;
     }
 }
+
+/// <summary>
+/// Converts current step number to color for capture progress dots.
+/// Parameter is the step number (1-4). Value is the current completed step.
+/// </summary>
+public class StepToColorConverter : IValueConverter
+{
+    private static readonly SolidColorBrush CompletedColor = new(Color.Parse("#10B981")); // Green
+    private static readonly SolidColorBrush CurrentColor = new(Color.Parse("#F59E0B"));   // Amber
+    private static readonly SolidColorBrush PendingColor = new(Color.Parse("#E5E7EB"));   // Gray
+
+    public object? Convert(object? value, Type targetType, object? parameter, CultureInfo culture)
+    {
+        if (value is not int currentStep || parameter is not string stepStr ||
+            !int.TryParse(stepStr, out var stepNumber))
+        {
+            return PendingColor;
+        }
+
+        // If current step is greater than this step number, it's completed
+        if (currentStep > stepNumber)
+        {
+            return CompletedColor;
+        }
+        // If current step equals this step number, it's the current one
+        if (currentStep == stepNumber)
+        {
+            return CurrentColor;
+        }
+        // Otherwise it's pending
+        return PendingColor;
+    }
+
+    public object? ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture)
+    {
+        throw new NotImplementedException();
+    }
+}

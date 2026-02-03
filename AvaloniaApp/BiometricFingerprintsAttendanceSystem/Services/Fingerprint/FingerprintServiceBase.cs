@@ -38,6 +38,10 @@ public abstract class FingerprintServiceBase : IFingerprintService
     public abstract Task<IReadOnlyList<FingerPosition>> ListEnrolledFingersAsync(string username, CancellationToken cancellationToken = default);
     public abstract Task<bool> DeleteEnrolledFingersAsync(string username, CancellationToken cancellationToken = default);
     public abstract int GetSampleQuality(byte[] sample);
+    public abstract Task<MultiCaptureEnrollmentResult> EnrollFingerMultiCaptureAsync(
+        int requiredSamples = 4,
+        Action<int, int, string>? progress = null,
+        CancellationToken cancellationToken = default);
 
     protected virtual void Dispose(bool disposing)
     {

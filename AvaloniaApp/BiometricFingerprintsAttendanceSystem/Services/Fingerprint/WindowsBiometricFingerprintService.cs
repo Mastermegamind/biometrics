@@ -366,6 +366,66 @@ public sealed class WindowsBiometricFingerprintService : FingerprintServiceBase
         return sample.Length > 0 ? 75 : 0;
     }
 
+    public override async Task<MultiCaptureEnrollmentResult> EnrollFingerMultiCaptureAsync(
+        int requiredSamples = 4,
+        Action<int, int, string>? progress = null,
+        CancellationToken cancellationToken = default)
+    {
+        if (_sessionHandle == nint.Zero)
+        {
+            return MultiCaptureEnrollmentResult.Failed("WBF session not initialized.");
+        }
+
+        var samples = new List<byte[]>();
+
+        try
+        {
+            for (int i = 0; i < requiredSamples && !cancellationToken.IsCancellationRequested; i++)
+            {
+                progress?.Invoke(i + 1, requiredSamples, $"Place finger on scanner ({i + 1}/{requiredSamples})...");
+
+                var captureResult = await CaptureAsync(cancellationToken);
+
+                if (cancellationToken.IsCancellationRequested)
+                {
+                    return MultiCaptureEnrollmentResult.Cancelled(samples.Count);
+                }
+
+                if (!captureResult.Success || captureResult.SampleData == null)
+                {
+                    progress?.Invoke(i + 1, requiredSamples, captureResult.Message ?? "Capture failed. Try again...");
+                    i--; // Retry this sample
+                    continue;
+                }
+
+                samples.Add(captureResult.SampleData);
+
+                var remaining = requiredSamples - samples.Count;
+                if (remaining > 0)
+                {
+                    progress?.Invoke(samples.Count, requiredSamples, $"Good! {remaining} more scan{(remaining == 1 ? "" : "s")} needed...");
+                }
+            }
+
+            if (samples.Count < requiredSamples)
+            {
+                return MultiCaptureEnrollmentResult.Failed($"Only {samples.Count} samples collected.", samples.Count);
+            }
+
+            // WBF doesn't have enrollment like DPFP, just return the last sample as template
+            progress?.Invoke(requiredSamples, requiredSamples, "Enrollment complete!");
+            return MultiCaptureEnrollmentResult.Successful(samples[^1], null, samples.Count);
+        }
+        catch (OperationCanceledException)
+        {
+            return MultiCaptureEnrollmentResult.Cancelled(samples.Count);
+        }
+        catch (Exception ex)
+        {
+            return MultiCaptureEnrollmentResult.Failed($"Enrollment error: {ex.Message}", samples.Count);
+        }
+    }
+
     private static nint GetFirstUnitId(nint unitSchemaArray, nint unitCount)
     {
         if (unitCount <= 0 || unitSchemaArray == nint.Zero)

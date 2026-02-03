@@ -1197,7 +1197,11 @@ public class OnlineDataProvider
                 _logger.LogDebug("ParseEnrollmentRecords: returning {Count} records from envelope.Data", envelope.Data.Count);
                 return envelope.Data;
             }
-            _logger.LogDebug("ParseEnrollmentRecords: envelope parsed but no records found");
+            if (envelope != null)
+            {
+                _logger.LogDebug("ParseEnrollmentRecords: envelope parsed but no records found");
+                return envelope.Records ?? envelope.Data ?? [];
+            }
         }
         catch (Exception ex)
         {

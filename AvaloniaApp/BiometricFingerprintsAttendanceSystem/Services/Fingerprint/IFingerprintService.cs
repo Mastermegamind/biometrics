@@ -104,4 +104,39 @@ public interface IFingerprintService : IDisposable
     /// Gets the quality score of a captured fingerprint sample (0-100).
     /// </summary>
     int GetSampleQuality(byte[] sample);
+
+    /// <summary>
+    /// Captures multiple fingerprint samples (typically 4) and creates a high-quality enrollment template.
+    /// This mimics the SDK's enrollment process which requires multiple scans for accuracy.
+    /// </summary>
+    /// <param name="requiredSamples">Number of samples required (default 4).</param>
+    /// <param name="progress">Optional callback for progress updates (current sample, total samples, message).</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>Enrollment result with template data.</returns>
+    Task<MultiCaptureEnrollmentResult> EnrollFingerMultiCaptureAsync(
+        int requiredSamples = 4,
+        Action<int, int, string>? progress = null,
+        CancellationToken cancellationToken = default);
+}
+
+/// <summary>
+/// Result from multi-capture enrollment process.
+/// </summary>
+public sealed class MultiCaptureEnrollmentResult
+{
+    public bool Success { get; init; }
+    public byte[]? TemplateData { get; init; }
+    public byte[]? ImageData { get; init; }
+    public string? ErrorMessage { get; init; }
+    public int SamplesCollected { get; init; }
+    public int SamplesRequired { get; init; }
+
+    public static MultiCaptureEnrollmentResult Successful(byte[] templateData, byte[]? imageData = null, int samplesCollected = 4)
+        => new() { Success = true, TemplateData = templateData, ImageData = imageData, SamplesCollected = samplesCollected, SamplesRequired = 4 };
+
+    public static MultiCaptureEnrollmentResult Failed(string message, int samplesCollected = 0)
+        => new() { Success = false, ErrorMessage = message, SamplesCollected = samplesCollected, SamplesRequired = 4 };
+
+    public static MultiCaptureEnrollmentResult Cancelled(int samplesCollected = 0)
+        => new() { Success = false, ErrorMessage = "Enrollment cancelled", SamplesCollected = samplesCollected, SamplesRequired = 4 };
 }

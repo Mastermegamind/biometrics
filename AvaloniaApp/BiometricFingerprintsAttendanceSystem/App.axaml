@@ -15,6 +15,7 @@
       <converters:BoolToOnlineColorConverter x:Key="BoolToOnlineColorConverter" />
       <converters:BoolToOnlineTextConverter x:Key="BoolToOnlineTextConverter" />
       <converters:BoolToColorConverter x:Key="BoolToColorConverter" />
+      <converters:StepToColorConverter x:Key="StepToColorConverter" />
 
       <!-- ── Brand Colors (theme-invariant) ── -->
       <SolidColorBrush x:Key="PrimaryBrush" Color="#8B0000" />

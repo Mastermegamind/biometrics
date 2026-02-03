@@ -51,4 +51,10 @@ public sealed class MantraFingerprintService : FingerprintServiceBase
         => throw new NotSupportedException("Mantra MFS100 integration is not configured. Install the SDK and enable IncludeFingerprintSdks.");
 
     public override int GetSampleQuality(byte[] sample) => 0;
+
+    public override Task<MultiCaptureEnrollmentResult> EnrollFingerMultiCaptureAsync(
+        int requiredSamples = 4,
+        Action<int, int, string>? progress = null,
+        CancellationToken cancellationToken = default)
+        => Task.FromResult(MultiCaptureEnrollmentResult.Failed("Mantra MFS100 SDK is not configured."));
 }
