@@ -7,8 +7,8 @@ namespace BiometricFingerprintsAttendanceSystem.ViewModels;
 public sealed class AttendanceReportViewModel : ViewModelBase
 {
     private readonly IServiceRegistry _services;
-    private string _fromDate = LagosTime.Now.ToShortDateString();
-    private string _toDate = LagosTime.Now.ToShortDateString();
+    private string _fromDate = LagosTime.Now.ToString("yyyy-MM-dd");
+    private string _toDate = LagosTime.Now.ToString("yyyy-MM-dd");
     private string _studentName = string.Empty;
     private string _countText = string.Empty;
     private string _statusMessage = string.Empty;
@@ -67,7 +67,12 @@ public sealed class AttendanceReportViewModel : ViewModelBase
     private async Task LoadAsync()
     {
         Records.Clear();
-        var rows = await _services.Attendance.GetByDateRangeAsync(FromDate, ToDate);
+        var normalizedFrom = NormalizeDateOrDefault(FromDate, LagosTime.Now.Date);
+        var normalizedTo = NormalizeDateOrDefault(ToDate, LagosTime.Now.Date);
+        FromDate = normalizedFrom;
+        ToDate = normalizedTo;
+
+        var rows = await _services.Attendance.GetByDateRangeAsync(normalizedFrom, normalizedTo);
         foreach (var row in rows)
         {
             Records.Add(row);
@@ -78,9 +83,24 @@ public sealed class AttendanceReportViewModel : ViewModelBase
 
     private async Task CountAsync()
     {
-        var count = await _services.Attendance.CountByStudentAndDateRangeAsync(StudentName.Trim(), FromDate, ToDate);
+        var normalizedFrom = NormalizeDateOrDefault(FromDate, LagosTime.Now.Date);
+        var normalizedTo = NormalizeDateOrDefault(ToDate, LagosTime.Now.Date);
+        FromDate = normalizedFrom;
+        ToDate = normalizedTo;
+
+        var count = await _services.Attendance.CountByStudentAndDateRangeAsync(StudentName.Trim(), normalizedFrom, normalizedTo);
         CountText = count.ToString();
         StatusMessage = "Attendance count updated.";
+    }
+
+    private static string NormalizeDateOrDefault(string input, DateTime fallback)
+    {
+        if (DateTime.TryParse(input, out var parsed))
+        {
+            return parsed.ToString("yyyy-MM-dd");
+        }
+
+        return fallback.ToString("yyyy-MM-dd");
     }
 }
 

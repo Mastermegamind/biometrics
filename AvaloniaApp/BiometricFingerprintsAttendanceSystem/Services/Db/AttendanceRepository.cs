@@ -1,4 +1,5 @@
 using BiometricFingerprintsAttendanceSystem.Models;
+using System.Globalization;
 using MySqlConnector;
 
 namespace BiometricFingerprintsAttendanceSystem.Services.Db;
@@ -89,10 +90,10 @@ public sealed class AttendanceRepository
             {
                 RegNo = reader.GetString("regno"),
                 Name = reader.GetString("name"),
-                Date = reader.GetString("date"),
-                Day = reader.GetString("day"),
-                TimeIn = reader.GetString("timein"),
-                TimeOut = reader.GetString("timeout")
+                Date = ReadStringValue(reader, "date", "yyyy-MM-dd"),
+                Day = ReadStringValue(reader, "day", null),
+                TimeIn = ReadStringValue(reader, "timein", "HH:mm:ss"),
+                TimeOut = ReadStringValue(reader, "timeout", "HH:mm:ss")
             });
         }
 
@@ -112,5 +113,23 @@ public sealed class AttendanceRepository
 
         var result = await cmd.ExecuteScalarAsync(cancellationToken);
         return Convert.ToInt32(result);
+    }
+
+    private static string ReadStringValue(MySqlDataReader reader, string name, string? dateFormat)
+    {
+        var ordinal = reader.GetOrdinal(name);
+        if (reader.IsDBNull(ordinal))
+        {
+            return string.Empty;
+        }
+
+        var value = reader.GetValue(ordinal);
+        return value switch
+        {
+            DateTime dt => string.IsNullOrWhiteSpace(dateFormat) ? dt.ToString(CultureInfo.InvariantCulture) : dt.ToString(dateFormat, CultureInfo.InvariantCulture),
+            TimeSpan ts => string.IsNullOrWhiteSpace(dateFormat) ? ts.ToString() : ts.ToString(dateFormat, CultureInfo.InvariantCulture),
+            string text => text,
+            _ => Convert.ToString(value, CultureInfo.InvariantCulture) ?? string.Empty
+        };
     }
 }

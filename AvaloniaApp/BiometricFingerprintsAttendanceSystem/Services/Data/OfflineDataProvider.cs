@@ -1,6 +1,7 @@
 using BiometricFingerprintsAttendanceSystem.Services.Db;
 using BiometricFingerprintsAttendanceSystem.Services.Fingerprint;
 using Microsoft.Extensions.Caching.Memory;
+using System.Globalization;
 using System.Security.Cryptography;
 using Microsoft.Extensions.Logging;
 using MySqlConnector;
@@ -489,8 +490,18 @@ public class OfflineDataProvider
             }
 
             var recordId = reader.GetInt64(0);
-            var timeInStr = reader.GetString(1);
+            var timeIn = ReadTimeFromReader(reader, 1, today);
             await reader.CloseAsync();
+
+            if (timeIn == null)
+            {
+                return new ClockOutResponse
+                {
+                    Success = false,
+                    Message = "Invalid clock-in time record",
+                    Student = student
+                };
+            }
 
             // Update with clock-out time
             var now = LagosTime.Now;
@@ -502,8 +513,7 @@ public class OfflineDataProvider
             await updateCmd.ExecuteNonQueryAsync();
 
             // Calculate duration
-            var timeIn = DateTime.Parse($"{today:yyyy-MM-dd} {timeInStr}");
-            var duration = now - timeIn;
+            var duration = now - timeIn.Value;
 
             _logger.LogInformation("Clock-out recorded locally for {RegNo} at {Time}", matchedRegNo, now);
 
@@ -754,6 +764,53 @@ public class OfflineDataProvider
         return "any";
     }
 
+    private static DateTime? ReadTimeFromReader(MySqlDataReader reader, int ordinal, DateTime date)
+    {
+        if (reader.IsDBNull(ordinal))
+        {
+            return null;
+        }
+
+        var value = reader.GetValue(ordinal);
+        switch (value)
+        {
+            case TimeSpan ts:
+                return date.Date.Add(ts);
+            case DateTime dt:
+                return dt;
+            case string text:
+                return ParseTimeText(text, date);
+            default:
+                var fallback = Convert.ToString(value, CultureInfo.InvariantCulture);
+                return ParseTimeText(fallback, date);
+        }
+    }
+
+    private static DateTime? ParseTimeText(string? text, DateTime date)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return null;
+        }
+
+        if (TimeSpan.TryParse(text, CultureInfo.InvariantCulture, out var ts))
+        {
+            return date.Date.Add(ts);
+        }
+
+        if (DateTime.TryParse(text, CultureInfo.InvariantCulture, DateTimeStyles.AssumeLocal, out var dt))
+        {
+            return dt;
+        }
+
+        if (DateTime.TryParse($"{date:yyyy-MM-dd} {text}", CultureInfo.InvariantCulture, DateTimeStyles.AssumeLocal, out var combined))
+        {
+            return combined;
+        }
+
+        return null;
+    }
+
     public async Task UpsertStudentSnapshotAsync(StudentInfo student, EnrollmentStatus? status)
     {
         try
@@ -845,8 +902,18 @@ public class OfflineDataProvider
             }
 
             var recordId = reader.GetInt64(0);
-            var timeInStr = reader.GetString(1);
+            var timeIn = ReadTimeFromReader(reader, 1, date);
             await reader.CloseAsync();
+
+            if (timeIn == null)
+            {
+                return new ClockOutResponse
+                {
+                    Success = false,
+                    Message = "Invalid clock-in time record",
+                    Student = student
+                };
+            }
 
             // Update with clock-out time
             await using var updateCmd = conn.CreateCommand();
@@ -857,8 +924,7 @@ public class OfflineDataProvider
             await updateCmd.ExecuteNonQueryAsync();
 
             // Calculate duration
-            var timeIn = DateTime.Parse($"{date:yyyy-MM-dd} {timeInStr}");
-            var duration = now - timeIn;
+            var duration = now - timeIn.Value;
 
             _logger.LogInformation("Clock-out recorded locally (verified) for {RegNo} at {Time}", request.RegNo, now);
 

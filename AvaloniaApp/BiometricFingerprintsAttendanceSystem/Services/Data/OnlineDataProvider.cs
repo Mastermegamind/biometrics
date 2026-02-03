@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json;
@@ -947,6 +948,68 @@ public class OnlineDataProvider
         }
     }
 
+    private sealed class FlexibleTimeSpanConverter : JsonConverter<TimeSpan?>
+    {
+        public override TimeSpan? Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+        {
+            if (reader.TokenType == JsonTokenType.Null)
+            {
+                return null;
+            }
+
+            if (reader.TokenType == JsonTokenType.Number)
+            {
+                if (reader.TryGetInt64(out var seconds))
+                {
+                    return TimeSpan.FromSeconds(seconds);
+                }
+
+                if (reader.TryGetDouble(out var dbl))
+                {
+                    return TimeSpan.FromSeconds(dbl);
+                }
+            }
+
+            if (reader.TokenType == JsonTokenType.String)
+            {
+                var text = reader.GetString();
+                if (string.IsNullOrWhiteSpace(text))
+                {
+                    return null;
+                }
+
+                if (TimeSpan.TryParse(text, CultureInfo.InvariantCulture, out var ts))
+                {
+                    return ts;
+                }
+
+                if (long.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out var seconds))
+                {
+                    return TimeSpan.FromSeconds(seconds);
+                }
+
+                if (double.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out var dbl))
+                {
+                    return TimeSpan.FromSeconds(dbl);
+                }
+            }
+
+            return null;
+        }
+
+        public override void Write(Utf8JsonWriter writer, TimeSpan? value, JsonSerializerOptions options)
+        {
+            if (value.HasValue)
+            {
+                writer.WriteStringValue(value.Value.ToString());
+            }
+            else
+            {
+                writer.WriteNullValue();
+            }
+        }
+    }
+
     private record ApiClockInRequest
     {
         [JsonPropertyName("templateBase64")]
@@ -962,6 +1025,7 @@ public class OnlineDataProvider
         public bool Success { get; init; }
         public string? Message { get; init; }
         public ApiStudentResponse? Student { get; init; }
+        [JsonConverter(typeof(FlexibleDateTimeConverter))]
         public DateTime? ClockInTime { get; init; }
         public bool AlreadyClockedIn { get; init; }
     }
@@ -997,8 +1061,11 @@ public class OnlineDataProvider
         public bool Success { get; init; }
         public string? Message { get; init; }
         public ApiStudentResponse? Student { get; init; }
+        [JsonConverter(typeof(FlexibleDateTimeConverter))]
         public DateTime? ClockInTime { get; init; }
+        [JsonConverter(typeof(FlexibleDateTimeConverter))]
         public DateTime? ClockOutTime { get; init; }
+        [JsonConverter(typeof(FlexibleTimeSpanConverter))]
         public TimeSpan? Duration { get; init; }
         public bool NotClockedIn { get; init; }
     }
