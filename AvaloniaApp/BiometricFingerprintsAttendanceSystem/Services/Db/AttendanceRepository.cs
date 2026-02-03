@@ -127,7 +127,7 @@ public sealed class AttendanceRepository
         return value switch
         {
             DateTime dt => string.IsNullOrWhiteSpace(dateFormat) ? dt.ToString(CultureInfo.InvariantCulture) : dt.ToString(dateFormat, CultureInfo.InvariantCulture),
-            TimeSpan ts => string.IsNullOrWhiteSpace(dateFormat) ? ts.ToString() : ts.ToString(dateFormat, CultureInfo.InvariantCulture),
+            TimeSpan ts => string.IsNullOrWhiteSpace(dateFormat) ? ts.ToString() : ts.ToString(@"hh\:mm\:ss", CultureInfo.InvariantCulture),
             string text => text,
             _ => Convert.ToString(value, CultureInfo.InvariantCulture) ?? string.Empty
         };

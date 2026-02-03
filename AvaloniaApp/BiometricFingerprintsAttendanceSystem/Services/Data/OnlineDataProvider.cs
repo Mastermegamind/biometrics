@@ -523,7 +523,8 @@ public class OnlineDataProvider
                 {
                     RegNo = apiResponse.Student.RegNo ?? "",
                     Name = apiResponse.Student.Name ?? "",
-                    ClassName = apiResponse.Student.ClassName ?? ""
+                    ClassName = apiResponse.Student.ClassName ?? "",
+                    PassportUrl = apiResponse.Student.PassportUrl
                 } : null,
                 ClockInTime = apiResponse.ClockInTime,
                 ClockOutTime = apiResponse.ClockOutTime,
@@ -650,7 +651,8 @@ public class OnlineDataProvider
                 {
                     RegNo = apiResponse.Student.RegNo ?? "",
                     Name = apiResponse.Student.Name ?? "",
-                    ClassName = apiResponse.Student.ClassName ?? ""
+                    ClassName = apiResponse.Student.ClassName ?? "",
+                    PassportUrl = apiResponse.Student.PassportUrl
                 } : null,
                 ClockInTime = apiResponse.ClockInTime,
                 ClockOutTime = apiResponse.ClockOutTime,
@@ -678,7 +680,7 @@ public class OnlineDataProvider
         {
             var url = $"/api/attendance?from={from:yyyy-MM-dd}&to={to:yyyy-MM-dd}";
             if (!string.IsNullOrEmpty(regNo))
-                url += $"&regNo={Uri.EscapeDataString(regNo)}";
+                url += $"&regno={Uri.EscapeDataString(regNo)}";
 
             LogRequest("GET", url, new { from, to, regNo });
             var response = await _http.GetAsync(url);
@@ -696,7 +698,7 @@ public class OnlineDataProvider
                 RegNo = r.RegNo ?? "",
                 Name = r.Name ?? "",
                 ClassName = r.ClassName ?? "",
-                Date = r.Date,
+                Date = DateTime.TryParse(r.Date, out var parsedDate) ? parsedDate : DateTime.MinValue,
                 TimeIn = r.TimeIn,
                 TimeOut = r.TimeOut,
                 IsSynced = true
@@ -1076,8 +1078,10 @@ public class OnlineDataProvider
         public string? RegNo { get; init; }
         public string? Name { get; init; }
         public string? ClassName { get; init; }
-        public DateTime Date { get; init; }
+        public string? Date { get; init; }
+        [JsonConverter(typeof(FlexibleDateTimeConverter))]
         public DateTime? TimeIn { get; init; }
+        [JsonConverter(typeof(FlexibleDateTimeConverter))]
         public DateTime? TimeOut { get; init; }
     }
 

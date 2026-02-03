@@ -1,5 +1,6 @@
 using System.Windows.Input;
 using System.Text;
+using System.Net.Http;
 using Avalonia.Media.Imaging;
 using BiometricFingerprintsAttendanceSystem.Services;
 using BiometricFingerprintsAttendanceSystem.Services.Data;
@@ -12,6 +13,9 @@ public class LiveClockOutViewModel : ViewModelBase
 {
     private readonly IServiceRegistry _services;
     private readonly ILogger<LiveClockOutViewModel> _logger;
+    private readonly HttpClient _http = new();
+    private CancellationTokenSource? _scanningCts;
+    private static readonly TimeSpan ResultDisplayDuration = TimeSpan.FromSeconds(5);
 
     private string _studentName = string.Empty;
     private string _studentRegNo = string.Empty;
@@ -40,8 +44,8 @@ public class LiveClockOutViewModel : ViewModelBase
         ClockOutCommand = new AsyncRelayCommand(ProcessClockOutAsync, () => !IsProcessing);
         ResetCommand = new RelayCommand(Reset);
 
-        // Auto-start scanning when view is loaded
-        _ = StartScanningAsync();
+        // Auto-start continuous scanning when view is loaded
+        _ = StartContinuousScanningAsync();
         UpdateTemplateCacheIndicators();
     }
 
@@ -161,8 +165,12 @@ public class LiveClockOutViewModel : ViewModelBase
 
     // ==================== Methods ====================
 
-    private async Task StartScanningAsync()
+    private async Task StartContinuousScanningAsync()
     {
+        _scanningCts?.Cancel();
+        _scanningCts = new CancellationTokenSource();
+        var token = _scanningCts.Token;
+
         try
         {
             var initResult = await _services.Fingerprint.InitializeAsync();
@@ -174,13 +182,52 @@ public class LiveClockOutViewModel : ViewModelBase
             }
 
             StatusMessage = "Ready. Place your finger on the scanner...";
-            _logger.LogInformation("Live clock-out scanner ready");
+            _logger.LogInformation("Live clock-out continuous scanner ready");
+
+            // Continuous scanning loop
+            while (!token.IsCancellationRequested)
+            {
+                try
+                {
+                    await ProcessClockOutAsync();
+
+                    if (ShowResult)
+                    {
+                        // Display result for a few seconds before auto-reset
+                        await Task.Delay(ResultDisplayDuration, token);
+                        Reset();
+                    }
+                    else
+                    {
+                        // Brief delay before retrying if capture failed
+                        await Task.Delay(500, token);
+                    }
+                }
+                catch (OperationCanceledException)
+                {
+                    break;
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Continuous scanning iteration error");
+                    await Task.Delay(1000, token);
+                }
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // Expected when stopping
         }
         catch (Exception ex)
         {
             StatusMessage = $"Scanner error: {ex.Message}";
-            _logger.LogError(ex, "Live clock-out scanner error");
+            _logger.LogError(ex, "Live clock-out continuous scanner error");
         }
+    }
+
+    public void StopScanning()
+    {
+        _scanningCts?.Cancel();
     }
 
     private async Task ProcessClockOutAsync()
@@ -272,21 +319,40 @@ public class LiveClockOutViewModel : ViewModelBase
 
             ShowResult = true;
 
-            if (result.Success && result.Student != null)
+            if (result.NotClockedIn)
+            {
+                IsSuccess = false;
+                StudentName = result.Student?.Name ?? "";
+                StudentRegNo = result.Student?.RegNo ?? "";
+                ClockInTime = string.Empty;
+                ClockOutTime = string.Empty;
+                Duration = string.Empty;
+                StatusMessage = "You haven't clocked in today! Please clock in first.";
+                _logger.LogWarning("Live clock-out not clocked in for RegNo {RegNo}", StudentRegNo);
+            }
+            else if (result.Success && result.Student != null)
             {
                 _logger.LogInformation("Live clock-out success for RegNo {RegNo}", result.Student.RegNo);
                 IsSuccess = true;
                 StudentName = result.Student.Name;
                 StudentRegNo = result.Student.RegNo;
                 StudentClass = result.Student.ClassName;
-                ClockInTime = result.ClockInTime?.ToString("HH:mm:ss") ?? "--:--:--";
-                ClockOutTime = result.ClockOutTime?.ToString("HH:mm:ss") ?? LagosTime.Now.ToString("HH:mm:ss");
+                var clockOut = result.ClockOutTime ?? LagosTime.Now;
+                var clockIn = result.ClockInTime;
+                var duration = result.Duration;
 
-                // Calculate and display duration
-                if (result.Duration.HasValue)
+                if (!clockIn.HasValue && duration.HasValue)
                 {
-                    Duration = FormatDuration(result.Duration.Value);
+                    clockIn = clockOut - duration.Value;
                 }
+                if (!duration.HasValue && clockIn.HasValue)
+                {
+                    duration = clockOut - clockIn.Value;
+                }
+
+                ClockInTime = clockIn?.ToString("HH:mm:ss") ?? "--:--:--";
+                ClockOutTime = clockOut.ToString("HH:mm:ss");
+                Duration = duration.HasValue ? FormatDuration(duration.Value) : string.Empty;
 
                 // Load photo
                 if (result.Student.PassportPhoto != null)
@@ -297,7 +363,7 @@ public class LiveClockOutViewModel : ViewModelBase
                 else if (!string.IsNullOrEmpty(result.Student.PassportUrl))
                 {
                     var photoResult = await _services.Data.GetStudentPhotoAsync(result.Student.RegNo);
-                    if (photoResult.Success && photoResult.Data != null)
+                    if (photoResult.Success && photoResult.Data != null && photoResult.Data.Length > 0)
                     {
                         using var stream = new MemoryStream(photoResult.Data);
                         StudentPhoto = new Bitmap(stream);
@@ -305,6 +371,7 @@ public class LiveClockOutViewModel : ViewModelBase
                     else
                     {
                         _logger.LogWarning("Live clock-out photo fetch failed for RegNo {RegNo}: {Message}", result.Student.RegNo, photoResult.Message ?? "No photo data");
+                        await TryLoadPassportFromUrlAsync(result.Student.PassportUrl);
                     }
                 }
 
@@ -315,14 +382,6 @@ public class LiveClockOutViewModel : ViewModelBase
                 {
                     StatusMessage += " (Saved offline, will sync later)";
                 }
-            }
-            else if (result.NotClockedIn)
-            {
-                IsSuccess = false;
-                StudentName = result.Student?.Name ?? "";
-                StudentRegNo = result.Student?.RegNo ?? "";
-                StatusMessage = "You haven't clocked in today! Please clock in first.";
-                _logger.LogWarning("Live clock-out not clocked in for RegNo {RegNo}", StudentRegNo);
             }
             else
             {
@@ -456,6 +515,35 @@ public class LiveClockOutViewModel : ViewModelBase
             return $"{(int)duration.TotalHours}h {duration.Minutes}m";
         }
         return $"{duration.Minutes}m {duration.Seconds}s";
+    }
+
+    private async Task<bool> TryLoadPassportFromUrlAsync(string url)
+    {
+        try
+        {
+            var response = await _http.GetAsync(url);
+            if (!response.IsSuccessStatusCode)
+            {
+                _logger.LogWarning("Passport URL fetch failed {Url} {StatusCode}", url, (int)response.StatusCode);
+                return false;
+            }
+
+            var bytes = await response.Content.ReadAsByteArrayAsync();
+            if (bytes.Length == 0)
+            {
+                _logger.LogWarning("Passport URL returned empty body {Url}", url);
+                return false;
+            }
+
+            using var stream = new MemoryStream(bytes);
+            StudentPhoto = new Bitmap(stream);
+            return true;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Passport URL fetch error {Url}", url);
+            return false;
+        }
     }
 
     private void SaveClockOutTemplate(byte[] templateData, string regNo, string source)

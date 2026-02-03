@@ -9,7 +9,8 @@
       "Bash(Select-Object -First 3 FullName)",
       "Bash(.build.ps1)",
       "Bash(dir \"C:\\\\laragon\\\\www\\\\biometrics\\\\biometrics\\\\AvaloniaApp\\\\BiometricFingerprintsAttendanceSystem\\\\bin\\\\Debug\"\")",
-      "Bash(dir:*)"
+      "Bash(dir:*)",
+      "Bash(powershell.exe -File build.ps1:*)"
     ]
   }
 }

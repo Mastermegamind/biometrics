@@ -72,13 +72,31 @@ public sealed class AttendanceReportViewModel : ViewModelBase
         FromDate = normalizedFrom;
         ToDate = normalizedTo;
 
-        var rows = await _services.Attendance.GetByDateRangeAsync(normalizedFrom, normalizedTo);
-        foreach (var row in rows)
-        {
-            Records.Add(row);
-        }
+        // Use IDataService to fetch from API (or offline cache based on sync mode)
+        var fromDate = DateTime.Parse(normalizedFrom);
+        var toDate = DateTime.Parse(normalizedTo);
+        var result = await _services.Data.GetAttendanceAsync(fromDate, toDate);
 
-        StatusMessage = $"Loaded {Records.Count} records.";
+        if (result.Success && result.Data != null)
+        {
+            foreach (var apiRecord in result.Data)
+            {
+                Records.Add(new AttendanceRecord
+                {
+                    RegNo = apiRecord.RegNo,
+                    Name = apiRecord.Name,
+                    Date = apiRecord.Date.ToString("yyyy-MM-dd"),
+                    Day = apiRecord.Date.DayOfWeek.ToString(),
+                    TimeIn = apiRecord.TimeIn?.ToString("HH:mm:ss") ?? string.Empty,
+                    TimeOut = apiRecord.TimeOut?.ToString("HH:mm:ss") ?? string.Empty
+                });
+            }
+            StatusMessage = $"Loaded {Records.Count} records.";
+        }
+        else
+        {
+            StatusMessage = result.Message ?? "Failed to load attendance records.";
+        }
     }
 
     private async Task CountAsync()
@@ -88,9 +106,22 @@ public sealed class AttendanceReportViewModel : ViewModelBase
         FromDate = normalizedFrom;
         ToDate = normalizedTo;
 
-        var count = await _services.Attendance.CountByStudentAndDateRangeAsync(StudentName.Trim(), normalizedFrom, normalizedTo);
-        CountText = count.ToString();
-        StatusMessage = "Attendance count updated.";
+        var fromDate = DateTime.Parse(normalizedFrom);
+        var toDate = DateTime.Parse(normalizedTo);
+        var result = await _services.Data.GetAttendanceAsync(fromDate, toDate);
+
+        if (result.Success && result.Data != null)
+        {
+            var needle = StudentName.Trim();
+            var count = result.Data.Count(r => string.Equals(r.Name, needle, StringComparison.OrdinalIgnoreCase));
+            CountText = count.ToString();
+            StatusMessage = "Attendance count updated.";
+        }
+        else
+        {
+            CountText = "0";
+            StatusMessage = result.Message ?? "Failed to load attendance records.";
+        }
     }
 
     private static string NormalizeDateOrDefault(string input, DateTime fallback)

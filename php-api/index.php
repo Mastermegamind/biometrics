@@ -290,6 +290,10 @@ try {
         $studentName = $match['name'];
         $className = $match['class_name'];
         $passportPath = $match['passport_path'] ?? null;
+        $passportUrl = $passportPath
+            ? api_base_url() . '/uploads/' . ltrim($passportPath, '/')
+            : null;
+        $passportPath = $match['passport_path'] ?? null;
         $fingerIndex = $match['finger_index'] ?? null;
         $matchScore = $match['match_score'] ?? null;
         $matchFar = $match['far'] ?? null;
@@ -425,6 +429,7 @@ try {
                     'regNo' => $regNo,
                     'name' => $studentName,
                     'className' => $className,
+                    'passportUrl' => $passportUrl,
                 ],
                 'clockInTime' => null,
                 'clockOutTime' => null,
@@ -457,6 +462,7 @@ try {
                 'regNo' => $regNo,
                 'name' => $studentName,
                 'className' => $className,
+                'passportUrl' => $passportUrl,
             ],
             'clockInTime' => $record['time_in'],
             'clockOutTime' => $clockOutTime,
@@ -611,7 +617,7 @@ try {
 
         // Verify student exists and get details
         $stmt = $pdo->prepare("
-            SELECT s.name, c.name AS class_name
+            SELECT s.name, c.name AS class_name, s.passport_path
             FROM students s
             LEFT JOIN classes c ON s.class_id = c.id
             WHERE s.reg_no = ?
@@ -626,6 +632,10 @@ try {
 
         $studentName = $student['name'];
         $className = $student['class_name'];
+        $passportPath = $student['passport_path'];
+        $passportUrl = $passportPath
+            ? api_base_url() . '/uploads/' . ltrim($passportPath, '/')
+            : null;
 
         // Ensure attendance_records table exists
         api_ensure_attendance_records_table($pdo);
@@ -651,6 +661,7 @@ try {
                     'regNo' => $regNo,
                     'name' => $studentName,
                     'className' => $className,
+                    'passportUrl' => $passportUrl,
                 ],
                 'clockInTime' => null,
                 'clockOutTime' => null,
@@ -683,6 +694,7 @@ try {
                 'regNo' => $regNo,
                 'name' => $studentName,
                 'className' => $className,
+                'passportUrl' => $passportUrl,
             ],
             'clockInTime' => $record['time_in'],
             'clockOutTime' => $clockOutTime,

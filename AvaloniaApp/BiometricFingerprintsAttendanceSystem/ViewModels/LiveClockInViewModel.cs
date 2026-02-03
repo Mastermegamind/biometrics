@@ -13,6 +13,8 @@ public class LiveClockInViewModel : ViewModelBase
 {
     private readonly IServiceRegistry _services;
     private readonly ILogger<LiveClockInViewModel> _logger;
+    private CancellationTokenSource? _scanningCts;
+    private static readonly TimeSpan ResultDisplayDuration = TimeSpan.FromSeconds(5);
 
     private string _studentName = string.Empty;
     private string _studentRegNo = string.Empty;
@@ -41,8 +43,8 @@ public class LiveClockInViewModel : ViewModelBase
         DebugCompareTemplatesCommand = new AsyncRelayCommand(DebugCompareTemplatesAsync, () => !IsProcessing);
         ResetCommand = new RelayCommand(Reset);
 
-        // Auto-start scanning when view is loaded
-        _ = StartScanningAsync();
+        // Auto-start continuous scanning when view is loaded
+        _ = StartContinuousScanningAsync();
         UpdateTemplateCacheIndicators();
     }
 
@@ -151,9 +153,12 @@ public class LiveClockInViewModel : ViewModelBase
 
     // ==================== Methods ====================
 
-    private async Task StartScanningAsync()
+    private async Task StartContinuousScanningAsync()
     {
-        // Initialize fingerprint scanner
+        _scanningCts?.Cancel();
+        _scanningCts = new CancellationTokenSource();
+        var token = _scanningCts.Token;
+
         try
         {
             var initResult = await _services.Fingerprint.InitializeAsync();
@@ -165,13 +170,52 @@ public class LiveClockInViewModel : ViewModelBase
             }
 
             StatusMessage = "Ready. Place your finger on the scanner...";
-            _logger.LogInformation("Live clock-in scanner ready");
+            _logger.LogInformation("Live clock-in continuous scanner ready");
+
+            // Continuous scanning loop
+            while (!token.IsCancellationRequested)
+            {
+                try
+                {
+                    await ProcessClockInAsync();
+
+                    if (ShowResult)
+                    {
+                        // Display result for a few seconds before auto-reset
+                        await Task.Delay(ResultDisplayDuration, token);
+                        Reset();
+                    }
+                    else
+                    {
+                        // Brief delay before retrying if capture failed
+                        await Task.Delay(500, token);
+                    }
+                }
+                catch (OperationCanceledException)
+                {
+                    break;
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Continuous scanning iteration error");
+                    await Task.Delay(1000, token);
+                }
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // Expected when stopping
         }
         catch (Exception ex)
         {
             StatusMessage = $"Scanner error: {ex.Message}";
-            _logger.LogError(ex, "Live clock-in scanner error");
+            _logger.LogError(ex, "Live clock-in continuous scanner error");
         }
+    }
+
+    public void StopScanning()
+    {
+        _scanningCts?.Cancel();
     }
 
     private async Task ProcessClockInAsync()

@@ -74,13 +74,6 @@
                         </Grid>
                     </Border>
 
-                    <!-- Scan Button -->
-                    <Button Content="Scan Fingerprint"
-                            Command="{Binding ClockOutCommand}"
-                            HorizontalAlignment="Center"
-                            Padding="40,15"
-                            FontSize="16"
-                            Margin="0,20,0,0"/>
                 </StackPanel>
             </Border>
 
